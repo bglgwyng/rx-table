@@ -1,0 +1,33 @@
+{
+	"name": "rx-table",
+	"version": "1.0.0",
+	"main": "index.js",
+	"scripts": {
+		"test": "vitest",
+		"lint": "npx @biomejs/biome check .",
+		"lint:fix": "npx @biomejs/biome check --write ."
+	},
+	"author": "",
+	"license": "ISC",
+	"description": "",
+	"devDependencies": {
+		"@biomejs/biome": "^1.9.4",
+		"@total-typescript/tsconfig": "^1.0.4",
+		"@types/assert": "^1.5.11",
+		"@types/better-sqlite3": "^7.6.13",
+		"@types/react": "^19.1.2",
+		"assert": "^2.1.0",
+		"expose-gc": "^1.0.0",
+		"react": "^19.1.0",
+		"tsx": "^4.19.3",
+		"typescript": "^5.8.3",
+		"vitest": "^3.1.2"
+	},
+	"dependencies": {
+		"@react-rxjs/core": "^0.10.8",
+		"better-sqlite3": "^11.9.1",
+		"many-keys-map": "^2.0.1",
+		"rxjs": "^7.8.2",
+		"sqlite": "^5.1.1"
+	}
+}
