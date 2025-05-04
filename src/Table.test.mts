@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 import { Table } from "./Table.mjs";
-import { SqliteStorage } from "./storages/SqliteStorage.mjs";
+import { BetterSqlite3Storage } from "./storages/better-sqlite3/BetterSqlite3Storage.mjs";
 
 type UserTable = {
 	columns: {
@@ -17,7 +17,7 @@ function createSqliteStorage() {
     id INTEGER PRIMARY KEY,
     name TEXT
   )`);
-	return new SqliteStorage<UserTable>(db, "users", ["id"]);
+	return new BetterSqlite3Storage<UserTable>(db, "users", ["id"]);
 }
 
 describe("Table", () => {

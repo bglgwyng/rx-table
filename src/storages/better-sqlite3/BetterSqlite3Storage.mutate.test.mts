@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { beforeEach, describe, expect, it } from "vitest";
-import type { Mutation } from "../Storage.mjs";
-import { SqliteStorage } from "./SqliteStorage.mjs";
+import type { Mutation } from "../../Storage.mjs";
+import { BetterSqlite3Storage } from "./BetterSqlite3Storage.mjs";
 
 type UserTable = {
 	columns: {
@@ -12,7 +12,7 @@ type UserTable = {
 };
 
 describe("SqliteStorage.mutate", () => {
-	let storage: SqliteStorage<UserTable>;
+	let storage: BetterSqlite3Storage<UserTable>;
 
 	beforeEach(() => {
 		const db = new Database(":memory:");
@@ -20,7 +20,7 @@ describe("SqliteStorage.mutate", () => {
       id INTEGER PRIMARY KEY,
       name TEXT
     )`);
-		storage = new SqliteStorage<UserTable>(db, "users", ["id"]);
+		storage = new BetterSqlite3Storage<UserTable>(db, "users", ["id"]);
 	});
 
 	it("mutate: insert/update/delete/upsert", () => {
