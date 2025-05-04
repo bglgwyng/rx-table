@@ -1,105 +1,102 @@
-import { describe, it, expect, assert } from "vitest";
-import { compileSql } from "./renderExpression.mjs";
-import type { TableBase } from "../../types/Table.mjs";
-import type { SqlExpression } from "../../types/SqlExpression.mjs";
+import { describe, it, expect } from "vitest";
+import {
+	compileSql,
+	compileSqlExpression,
+	renderSqlExpression,
+} from "./renderExpression.mjs";
+import type {
+	SqlExpression,
+	TupleExpression,
+} from "../../types/SqlExpression.mjs";
+import type { Sql } from "../../types/Sql.mjs";
 
-// Dummy table type for testing
-interface DummyTable extends TableBase {
-	id: number;
-	name: string;
-	age: number;
-}
+type Table = {
+	columns: {
+		foo: string;
+	};
+	primaryKey: ["foo"];
+};
+describe("renderSqlExpression", () => {
+	it("renders simple column expression with compileSqlExpression", () => {
+		const expr: SqlExpression<Table> = { kind: "column", name: "foo" };
 
-describe("compileSql / runRenderExpression", () => {
-	it("renders simple column = constant", () => {
-		const expr: SqlExpression<DummyTable> = {
-			kind: "binOp",
-			operator: "=",
-			left: { kind: "column", name: "age" },
-			right: { kind: "constant", value: 30 },
-		};
-		const [sql, params] = compileSql(expr)();
-		expect(sql).toBe("(age = ?)");
-		expect(params).toEqual([30]);
-	});
-
-	it("renders AND/OR and nested expressions", () => {
-		const expr: SqlExpression<DummyTable> = {
-			kind: "binOp",
-			operator: "AND",
-			left: {
-				kind: "binOp",
-				operator: ">",
-				left: { kind: "column", name: "age" },
-				right: { kind: "constant", value: 18 },
-			},
-			right: {
-				kind: "binOp",
-				operator: "OR",
-				left: {
-					kind: "binOp",
-					operator: "=",
-					left: { kind: "column", name: "name" },
-					right: { kind: "constant", value: "Alice" },
-				},
-				right: {
-					kind: "binOp",
-					operator: "=",
-					left: { kind: "column", name: "name" },
-					right: { kind: "constant", value: "Bob" },
-				},
-			},
-		};
-		const [sql, params] = compileSql(expr)();
-		expect(sql).toBe("((age > ?) AND ((name = ?) OR (name = ?)))");
-		expect(params).toEqual([18, "Alice", "Bob"]);
-	});
-
-	it("renders NOT expression", () => {
-		const expr: SqlExpression<DummyTable> = {
-			kind: "unOp",
-			operator: "NOT",
-			expression: {
-				kind: "binOp",
-				operator: "=",
-				left: { kind: "column", name: "id" },
-				right: { kind: "constant", value: 1 },
-			},
-		};
-		const [sql, params] = compileSql(expr)();
-		expect(sql).toBe("(NOT (id = ?))");
-		expect(params).toEqual([1]);
-	});
-
-	it("renders column to column comparison", () => {
-		const expr: SqlExpression<DummyTable> = {
-			kind: "binOp",
-			operator: "=",
-			left: { kind: "column", name: "id" },
-			right: { kind: "column", name: "age" },
-		};
-		const [sql, params] = compileSql(expr)();
-		expect(sql).toBe("(id = age)");
+		const [sql, getParams] = compileSqlExpression(expr);
+		expect(sql).toBe("foo");
+		const params = getParams({});
 		expect(params).toEqual([]);
 	});
 
-	it("renders parameter placeholder and resolves value", () => {
-		const expr: SqlExpression<DummyTable> = {
-			kind: "binOp",
-			operator: "=",
-			left: { kind: "column", name: "name" },
-			right: { kind: "parameter", name: "userName" },
-		};
-		const [sql, params] = compileSql(expr)((name) => {
-			if (name === "userName") return "Charlie";
-			throw new Error(`Unknown param: ${name}`);
-		});
-		expect(sql).toBe("(name = ?)");
-		expect(params).toEqual(["Charlie"]);
+	it("renders constant parameter with compileSqlExpression", () => {
+		const expr: SqlExpression<Table> = { kind: "constant", value: 123 };
+
+		const [sql, getParams] = compileSqlExpression(expr);
+		expect(sql).toEqual("?");
+		const params = getParams({});
+		expect(params).toEqual([123]);
 	});
 
-	it("throws on unsupported expression", () => {
-		// @ts-expect-error: purposely invalid
-		expect(() => compileSql({ kind: "unknown" })).toThrow();
+	it("renders tuple expression with compileSql", () => {
+		const expr: Sql = {
+			kind: "select",
+			table: "dummy",
+			columns: "*",
+			where: {
+				kind: "tuple",
+				expressions: [
+					{ kind: "constant", value: 1 },
+					{ kind: "parameter", getValue: (ctx: { name: string }) => ctx.name },
+					{ kind: "constant", value: 42 },
+				],
+			},
+		};
+		const [sql, getParams] = compileSql(expr);
+		expect(sql).toBe("SELECT * FROM dummy WHERE (?, ?, ?)");
+		const params = getParams({ name: "hello" });
+		expect(params).toEqual([1, "hello", 42]);
+	});
+
+	it("renders binary operation expression with compileSql", () => {
+		const expr: Sql = {
+			kind: "select",
+			table: "dummy",
+			columns: "*",
+			where: {
+				kind: "binOp",
+				operator: ">",
+				left: { kind: "column", name: "foo" },
+				right: { kind: "constant", value: 5 },
+			},
+		};
+		const [sql, getParams] = compileSql(expr);
+		expect(sql).toBe("SELECT * FROM dummy WHERE (foo > ?)");
+		const params = getParams({});
+		expect(params).toEqual([5]);
+	});
+
+	it("renders unary operation expression (NOT) with compileSqlExpression", () => {
+		const expr: SqlExpression<Table> = {
+			kind: "unOp",
+			operator: "NOT",
+			expression: { kind: "column", name: "foo" },
+		};
+
+		const [sql, getParams] = compileSqlExpression(expr);
+		expect(sql).toBe("(NOT foo)");
+		const params = getParams({});
+		expect(params).toEqual([]);
+	});
+
+	it("renders insert statement with compileSql", () => {
+		const expr: Sql = {
+			kind: "insert",
+			table: "dummy",
+			values: {
+				foo: { kind: "parameter", getValue: (ctx: { foo: string }) => ctx.foo },
+			},
+		};
+		const [sql, getParams] = compileSql(expr);
+		expect(sql).toBe("INSERT INTO dummy (foo) VALUES (?)");
+		const params = getParams({ foo: "bar" });
+		expect(params).toEqual(["bar"]);
 	});
 });

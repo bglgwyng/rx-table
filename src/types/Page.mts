@@ -21,12 +21,14 @@ export type Page<T extends TableBase> = {
 // Left-closed: only after is set
 
 export type PageInputLeftClosed<T extends TableBase> = {
+	kind: "leftClosed";
 	after?: PrimaryKeyRecord<T>;
 	first: number;
 };
 // Right-closed: only before is set
 
 export type PageInputRightClosed<T extends TableBase> = {
+	kind: "rightClosed";
 	before?: PrimaryKeyRecord<T>;
 	last: number;
 };
@@ -45,3 +47,9 @@ export type PageInput<T extends TableBase> = (
 export type PageInputDelta<T extends TableBase> =
 	| { kind: "loadPrev"; count?: number }
 	| { kind: "loadNext"; count?: number };
+
+export type Direction = "asc" | "desc";
+
+export function invertDirection(dir: Direction): Direction {
+	return dir === "asc" ? "desc" : "asc";
+}

@@ -1,14 +1,24 @@
-import type { Database } from "better-sqlite3";
+import type { Database, Statement } from "better-sqlite3";
 import type {
 	Mutation,
 	ReadableStorage,
 	WritableStorage,
 } from "../../Storage.mjs";
-import type { Page, PageInput } from "../../types/Page.mjs";
+import {
+	invertDirection,
+	type Page,
+	type PageInput,
+} from "../../types/Page.mjs";
 import type { PrimaryKey, PrimaryKeyRecord, Row } from "../../types/Table.mjs";
 import type { TableBase } from "../../types/Table.mjs";
 import { compileSql } from "./renderExpression.mjs";
 import assert from "assert";
+import type { Sql } from "../../types/Sql.mjs";
+import {
+	ands,
+	type Parameterizable,
+	type SqlExpression,
+} from "../../types/SqlExpression.mjs";
 
 export class BetterSqlite3Storage<Table extends TableBase>
 	implements WritableStorage<Table>, ReadableStorage<Table>
@@ -132,82 +142,149 @@ export class BetterSqlite3Storage<Table extends TableBase>
 	/**
 	 * Build SQL and params for findMany (for debugging/testing)
 	 */
-	compileFindMany(pageInput: PageInput<Table>): CompiledQuery {
+	compileFindMany(pageInput: PageInput<Table>): CompiledQuery<PageParameter> {
 		const selectCols = "*";
-		const whereClauses: string[] = [];
-		const params: unknown[] = [];
 
-		// Filtering
-		if (pageInput.filter) {
-			const [whereSql, filterParams] = compileSql(pageInput.filter)(() =>
-				assert.fail("Unsupported parameter in filter"),
-			);
-			whereClauses.push(whereSql);
-			params.push(...filterParams);
-		}
+		const ast: Sql = {
+			kind: "select",
+			table: this.tableName,
+			columns: selectCols,
+			where: pageInput.filter,
+			orderBy:
+				pageInput.orderBy && pageInput.orderBy.length > 0
+					? pageInput.orderBy
+					: this.primaryKeys.map((pk) => ({
+							column: pk,
+							direction: pageInput.kind === "leftClosed" ? "asc" : "desc",
+						})),
+			limit: {
+				kind: "parameter",
+				getValue: (context: PageParameter) => context.limit,
+			},
+		};
 
-		const orderBy =
-			pageInput.orderBy && pageInput.orderBy.length > 0
-				? pageInput.orderBy
-				: this.primaryKeys.map((pk) => ({
-						column: pk,
-						direction: "asc" as const,
-					}));
-		const orderByClause = orderBy
-			.map((o) => `${o.column} ${o.direction}`)
-			.join(", ");
+		const [queryString, getParams] = compileSql(ast);
+		return [this.database.prepare(queryString), getParams];
+	}
 
-		if ("after" in pageInput && pageInput.after) {
-			for (const pk of this.primaryKeys) {
-				whereClauses.push(`${pk} > ?`);
-				params.push(pageInput.after[pk as PrimaryKey<Table>[number]]);
-			}
-		}
-		if ("before" in pageInput && pageInput.before) {
-			for (const pk of this.primaryKeys) {
-				whereClauses.push(`${pk} < ?`);
-				params.push(pageInput.before[pk as PrimaryKey<Table>[number]]);
-			}
-		}
+	compileFindManyWithCursor(
+		pageInput: PageInput<Table>,
+		hasCursor: boolean,
+	): CompiledQuery<PageParameterWithCursor> {
+		const selectCols = "*";
 
-		const whereClause =
-			whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
+		const cursorWhere: SqlExpression<Table> | undefined = hasCursor
+			? pageInput.kind === "leftClosed"
+				? ands(
+						this.primaryKeys.map(
+							(pk): SqlExpression<Table> => ({
+								kind: "binOp",
+								operator: ">",
+								left: { kind: "column", name: pk },
+								right: {
+									kind: "parameter",
+									getValue: (context: PageParameterWithCursor) =>
+										context.cursor[pk],
+								},
+							}),
+						),
+					)
+				: ands(
+						this.primaryKeys.map(
+							(pk): SqlExpression<Table> => ({
+								kind: "binOp",
+								operator: "<",
+								left: { kind: "column", name: pk },
+								right: {
+									kind: "parameter",
+									getValue: (context: PageParameterWithCursor) =>
+										context.cursor[pk],
+								},
+							}),
+						),
+					)
+			: undefined;
+		assert(cursorWhere !== undefined, "cursorWhere is undefined");
 
-		let sql = `SELECT ${selectCols} FROM ${this.tableName} ${whereClause} ORDER BY ${orderByClause}`;
-		if ("first" in pageInput && typeof pageInput.first === "number") {
-			sql += " LIMIT ?";
-		}
-		return [sql, params];
+		const ast: Sql = {
+			kind: "select",
+			table: this.tableName,
+			columns: selectCols,
+			where: ands(
+				[pageInput.filter, cursorWhere].filter((x) => x !== undefined),
+			),
+			orderBy:
+				pageInput.orderBy && pageInput.orderBy.length > 0
+					? pageInput.orderBy.map((o) => ({
+							column: o.column,
+							direction:
+								pageInput.kind === "leftClosed"
+									? o.direction
+									: invertDirection(o.direction),
+						}))
+					: this.primaryKeys.map((pk) => ({
+							column: pk,
+							direction: pageInput.kind === "leftClosed" ? "asc" : "desc",
+						})),
+			limit: {
+				kind: "parameter",
+				getValue: (context: PageParameterWithCursor) => context.limit,
+			},
+		};
+
+		const [queryString, getParams] = compileSql(ast);
+		return [this.database.prepare(queryString), getParams];
 	}
 
 	findMany(pageInput: PageInput<Table>): Page<Table> {
 		// Build SELECT clause
-		const [baseSql, params] = this.compileFindMany(pageInput);
+		const [stmt, getParams] = this.compileFindMany(pageInput);
+		const [stmtWithCursor, getParamsWithCursor] =
+			this.compileFindManyWithCursor(pageInput, true);
 
 		let rows: Row<Table>[] = [];
 		let limit = 0;
 
-		if ("last" in pageInput && typeof pageInput.last === "number") {
+		if (pageInput.kind === "rightClosed") {
 			// Right-closed: fetch all rows before the cursor, take last N
-			const stmt = this.database.prepare(baseSql);
-			const allRows = stmt.all(...params) as Row<Table>[];
-			rows = allRows.slice(-pageInput.last);
-		} else if ("first" in pageInput && typeof pageInput.first === "number") {
-			// Left-closed: fetch first N rows after the cursor
-			limit = pageInput.first;
-			const stmt = this.database.prepare(baseSql);
-			rows = stmt.all(...params, limit) as Row<Table>[];
+
+			if (pageInput.before === undefined) {
+				limit = pageInput.last;
+				rows = stmt.all(
+					...getParams({ limit: pageInput.last }),
+				) as Row<Table>[];
+			} else {
+				limit = pageInput.last;
+				rows = stmtWithCursor.all(
+					...getParamsWithCursor({
+						cursor: pageInput.before,
+						limit: pageInput.last,
+					}),
+				) as Row<Table>[];
+			}
 		} else {
-			// fallback: fetch all
-			const stmt = this.database.prepare(baseSql);
-			rows = stmt.all(...params) as Row<Table>[];
+			// Left-closed: fetch first N rows after the cursor
+			if (pageInput.after === undefined) {
+				limit = pageInput.first;
+				rows = stmt.all(...getParams({ limit })) as Row<Table>[];
+			} else {
+				limit = pageInput.first;
+				rows = stmtWithCursor.all(
+					...getParamsWithCursor({
+						cursor: pageInput.after,
+						limit: pageInput.first,
+					}),
+				) as Row<Table>[];
+			}
 		}
+		console.info({ rows, limit });
 
 		// For rowCount, count all rows matching the filter (ignoring limit)
-		const whereClause = baseSql.match(/WHERE .+?(?= ORDER BY|$)/)?.[0] ?? "";
-		const countSql = `SELECT COUNT(*) as cnt FROM ${this.tableName} ${whereClause}`;
-		const countStmt = this.database.prepare(countSql);
-		const rowCount = (countStmt.get(...params) as { cnt: number }).cnt;
+		// const whereClause = stmt.sql.match(/WHERE .+?(?= ORDER BY|$)/)?.[0] ?? "";
+		// const countSql = `SELECT COUNT(*) as cnt FROM ${this.tableName} ${whereClause}`;
+		// const countStmt = this.database.prepare(countSql);
+		const rowCount = 0;
+		// (countStmt.get(...getParams()) as { cnt: number }).cnt;
 
 		const getCursor = (row: Row<Table>): PrimaryKeyRecord<Table> =>
 			Object.fromEntries(
@@ -225,4 +302,16 @@ export class BetterSqlite3Storage<Table extends TableBase>
 	}
 }
 
-export type CompiledQuery = [sql: string, params: unknown[]];
+export type CompiledQuery<Context extends Record<string, unknown>> = readonly [
+	statment: Statement,
+	params: (context?: Context) => unknown[],
+];
+
+type PageParameterWithCursor = {
+	cursor: Record<string, unknown>;
+	limit: number;
+};
+
+type PageParameter = {
+	limit: number;
+};
