@@ -4,7 +4,7 @@ import type { SqlExpression } from "../../types/SqlExpression.mjs";
 
 export function* renderSqlExpression(
 	expr: SqlExpression<TableBase>,
-): Generator<unknown, string> {
+): Generator<Placeholder, string> {
 	if (expr.kind === "binOp") {
 		const left = yield* renderSqlExpression(expr.left);
 		const right = yield* renderSqlExpression(expr.right);
@@ -22,7 +22,11 @@ export function* renderSqlExpression(
 		return expr.name;
 	}
 	if (expr.kind === "constant") {
-		yield expr.value;
+		yield ["constant", expr.value];
+		return "?";
+	}
+	if (expr.kind === "parameter") {
+		yield ["parameter", expr.name];
 		return "?";
 	}
 
@@ -31,14 +35,26 @@ export function* renderSqlExpression(
 
 export function compileSql(
 	expr: SqlExpression<TableBase>,
-): [sql: string, params: unknown[]] {
+): (getParam?: (name: string) => unknown) => [sql: string, params: unknown[]] {
 	const gen = renderSqlExpression(expr);
-	const params: unknown[] = [];
+	const params: Placeholder[] = [];
 	let next = gen.next();
 	while (!next.done) {
 		params.push(next.value);
 		next = gen.next();
 	}
 	const sql = next.value;
-	return [sql, params];
+	return (
+		getParam: (name: string) => unknown = () =>
+			assert.fail("Parameter not supported"),
+	) => [
+		sql,
+		params.map(([kind, value]) =>
+			kind === "constant" ? value : getParam(value),
+		),
+	];
 }
+
+export type Placeholder =
+	| readonly ["parameter", string]
+	| readonly ["constant", unknown];

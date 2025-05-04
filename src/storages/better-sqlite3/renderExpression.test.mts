@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, assert } from "vitest";
 import { compileSql } from "./renderExpression.mjs";
 import type { TableBase } from "../../types/Table.mjs";
 import type { SqlExpression } from "../../types/SqlExpression.mjs";
@@ -18,7 +18,7 @@ describe("compileSql / runRenderExpression", () => {
 			left: { kind: "column", name: "age" },
 			right: { kind: "constant", value: 30 },
 		};
-		const [sql, params] = compileSql(expr);
+		const [sql, params] = compileSql(expr)();
 		expect(sql).toBe("(age = ?)");
 		expect(params).toEqual([30]);
 	});
@@ -50,7 +50,7 @@ describe("compileSql / runRenderExpression", () => {
 				},
 			},
 		};
-		const [sql, params] = compileSql(expr);
+		const [sql, params] = compileSql(expr)();
 		expect(sql).toBe("((age > ?) AND ((name = ?) OR (name = ?)))");
 		expect(params).toEqual([18, "Alice", "Bob"]);
 	});
@@ -66,7 +66,7 @@ describe("compileSql / runRenderExpression", () => {
 				right: { kind: "constant", value: 1 },
 			},
 		};
-		const [sql, params] = compileSql(expr);
+		const [sql, params] = compileSql(expr)();
 		expect(sql).toBe("(NOT (id = ?))");
 		expect(params).toEqual([1]);
 	});
@@ -78,9 +78,24 @@ describe("compileSql / runRenderExpression", () => {
 			left: { kind: "column", name: "id" },
 			right: { kind: "column", name: "age" },
 		};
-		const [sql, params] = compileSql(expr);
+		const [sql, params] = compileSql(expr)();
 		expect(sql).toBe("(id = age)");
 		expect(params).toEqual([]);
+	});
+
+	it("renders parameter placeholder and resolves value", () => {
+		const expr: SqlExpression<DummyTable> = {
+			kind: "binOp",
+			operator: "=",
+			left: { kind: "column", name: "name" },
+			right: { kind: "parameter", name: "userName" },
+		};
+		const [sql, params] = compileSql(expr)((name) => {
+			if (name === "userName") return "Charlie";
+			throw new Error(`Unknown param: ${name}`);
+		});
+		expect(sql).toBe("(name = ?)");
+		expect(params).toEqual(["Charlie"]);
 	});
 
 	it("throws on unsupported expression", () => {

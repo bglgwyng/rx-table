@@ -8,6 +8,7 @@ import type { Page, PageInput } from "../../types/Page.mjs";
 import type { PrimaryKey, PrimaryKeyRecord, Row } from "../../types/Table.mjs";
 import type { TableBase } from "../../types/Table.mjs";
 import { compileSql } from "./renderExpression.mjs";
+import assert from "assert";
 
 export class BetterSqlite3Storage<Table extends TableBase>
 	implements WritableStorage<Table>, ReadableStorage<Table>
@@ -138,7 +139,9 @@ export class BetterSqlite3Storage<Table extends TableBase>
 
 		// Filtering
 		if (pageInput.filter) {
-			const [whereSql, filterParams] = compileSql(pageInput.filter);
+			const [whereSql, filterParams] = compileSql(pageInput.filter)(() =>
+				assert.fail("Unsupported parameter in filter"),
+			);
 			whereClauses.push(whereSql);
 			params.push(...filterParams);
 		}

@@ -10,6 +10,10 @@ export type SqlExpression<T extends TableBase, V = unknown> =
 			value: V;
 	  }
 	| {
+			kind: "parameter";
+			name: string;
+	  }
+	| {
 			kind: "binOp";
 			left: SqlExpression<T, unknown>;
 			right: SqlExpression<T, unknown>;
