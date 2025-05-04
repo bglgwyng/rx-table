@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { compileSql } from "./renderExpression.mjs";
-import type { SqlExpression, TableBase } from "../../types.mjs";
+import type { TableBase } from "../../types/Table.mjs";
+import type { SqlExpression } from "../../types/SqlExpression.mjs";
 
 // Dummy table type for testing
 interface DummyTable extends TableBase {

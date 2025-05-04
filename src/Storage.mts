@@ -1,11 +1,6 @@
-import type {
-	Page,
-	PageInput,
-	PrimaryKey,
-	PrimaryKeyRecord,
-	Row,
-	TableBase,
-} from "./types.mjs";
+import type { Page, PageInput } from "./types/Page.mjs";
+import type { PrimaryKey, PrimaryKeyRecord, Row } from "./types/Table.mjs";
+import type { TableBase } from "./types/Table.mjs";
 
 export type Storage<T extends TableBase> = ReadableStorage<T> &
 	WritableStorage<T> &

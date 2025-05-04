@@ -1,5 +1,6 @@
-import type { SqlExpression } from "../types.mjs";
-import type { TableBase, Row } from "../types.mjs";
+import type { SqlExpression } from "../types/SqlExpression.mjs";
+import type { Row } from "../types/Table.mjs";
+import type { TableBase } from "../types/Table.mjs";
 
 export function sqlExpressionToFilterFn<T extends TableBase>(
 	condition: SqlExpression<T>,

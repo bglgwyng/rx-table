@@ -5,10 +5,10 @@ import { sqlExpressionToFilterFn } from "../../util/sqlExpressionToFilterFn.mjs"
 import type {
 	PageInputLeftClosed,
 	PageInputRightClosed,
-	SqlExpression,
-	Row,
 	PageInput,
-} from "../../types.mjs";
+} from "../../types/Page.mjs";
+import type { Row } from "../../types/Table.mjs";
+import type { SqlExpression } from "../../types/SqlExpression.mjs";
 
 type UserTable = {
 	columns: {

@@ -1,5 +1,6 @@
 import assert from "assert";
-import type { SqlExpression, TableBase } from "../../types.mjs";
+import type { TableBase } from "../../types/Table.mjs";
+import type { SqlExpression } from "../../types/SqlExpression.mjs";
 
 export function* renderSqlExpression(
 	expr: SqlExpression<TableBase>,

@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { sqlExpressionToFilterFn } from "./sqlExpressionToFilterFn.mjs";
-import type { SqlExpression, TableBase, Row } from "../types.mjs";
+import type { Row } from "../types/Table.mjs";
+import type { TableBase } from "../types/Table.mjs";
+import type { SqlExpression } from "../types/SqlExpression.mjs";
 
 type SimpleTable = {
 	columns: {

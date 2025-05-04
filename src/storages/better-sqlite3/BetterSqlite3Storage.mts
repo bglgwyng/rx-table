@@ -4,14 +4,9 @@ import type {
 	ReadableStorage,
 	WritableStorage,
 } from "../../Storage.mjs";
-import type {
-	Page,
-	PageInput,
-	PrimaryKey,
-	PrimaryKeyRecord,
-	Row,
-	TableBase,
-} from "../../types.mjs";
+import type { Page, PageInput } from "../../types/Page.mjs";
+import type { PrimaryKey, PrimaryKeyRecord, Row } from "../../types/Table.mjs";
+import type { TableBase } from "../../types/Table.mjs";
 import { compileSql } from "./renderExpression.mjs";
 
 export class BetterSqlite3Storage<Table extends TableBase>

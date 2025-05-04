@@ -14,19 +14,19 @@ import {
 } from "rxjs";
 import type { Storage } from "./Storage.mjs";
 import { type Dynamic, createDynamic } from "./core/Dynamic.mjs";
+import type { Page, PageDelta, PageInput } from "./types/Page.mjs";
 import type {
-	Page,
-	PageDelta,
-	PageInput,
+	ReadableTable,
+	TableEvent,
+	WritableTable,
+} from "./types/Table.mjs";
+import type {
 	PrimaryKey,
 	PrimaryKeyRecord,
 	PrimaryKeyTuple,
-	ReadableTable,
 	Row,
-	TableBase,
-	TableEvent,
-	WritableTable,
-} from "./types.mjs";
+} from "./types/Table.mjs";
+import type { TableBase } from "./types/Table.mjs";
 import { partitionByKey } from "./util/partitionByKey.mjs";
 import { sqlExpressionToFilterFn } from "./util/sqlExpressionToFilterFn.mjs";
 

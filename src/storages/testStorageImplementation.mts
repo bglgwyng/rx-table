@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type { Storage } from "../Storage.mjs";
-import type { Row, PrimaryKeyRecord } from "../types.mjs";
+import type { Row, PrimaryKeyRecord } from "../types/Table.mjs";
 
 // UserTable 타입 정의 (테스트 목적)
 export type UserTable = {
