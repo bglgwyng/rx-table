@@ -116,12 +116,14 @@ export type SqlExpression<T extends TableBase, V = unknown> =
 				| "-"
 				| "*"
 				| "/"
-				| "^";
+				| "^"
+				| "AND"
+				| "OR";
 	  }
 	| {
 			kind: "unOp";
 			expression: SqlExpression<T, unknown>;
-			operator: "-" | "+";
+			operator: "-" | "+" | "NOT";
 	  };
 
 type LeftJoin<
