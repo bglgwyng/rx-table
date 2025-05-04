@@ -5,7 +5,8 @@
 	"scripts": {
 		"test": "vitest",
 		"lint": "npx @biomejs/biome check .",
-		"lint:fix": "npx @biomejs/biome check --write ."
+		"lint:fix": "npx @biomejs/biome check --write .",
+		"check": "tsc --noEmit"
 	},
 	"author": "",
 	"license": "ISC",
