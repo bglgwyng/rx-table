@@ -1,6 +1,17 @@
 import assert from "assert";
 import ManyKeyMap from "many-keys-map";
-import { Subject, concatAll, map, share, tap, timer } from "rxjs";
+import {
+	EMPTY,
+	type Observable,
+	Subject,
+	concatAll,
+	map,
+	mergeMap,
+	of,
+	share,
+	tap,
+	timer,
+} from "rxjs";
 import type { Storage } from "./Storage.mjs";
 import { type Dynamic, createDynamic } from "./core/Dynamic.mjs";
 import type {
@@ -17,6 +28,7 @@ import type {
 	WritableTable,
 } from "./types.mjs";
 import { partitionByKey } from "./util/partitionByKey.mjs";
+import { sqlExpressionToFilterFn } from "./util/sqlExpressionToFilterFn.mjs";
 
 export class Table<T extends TableBase>
 	implements ReadableTable<T>, WritableTable<T>
@@ -85,7 +97,52 @@ export class Table<T extends TableBase>
 		return dynamic;
 	}
 	findMany(pageInput: PageInput<T>): Dynamic<Page<T>, PageDelta<T>> {
-		assert.fail("Not implemented");
+		const page = this.storage.findMany(pageInput);
+		const filter = pageInput.filter
+			? sqlExpressionToFilterFn(pageInput.filter)
+			: () => true;
+		return createDynamic<Page<T>, PageDelta<T>>(
+			page,
+			this.events.pipe(
+				concatAll(),
+				mergeMap((e): Observable<[PageDelta<T>, Page<T>]> => {
+					const row = this.getRow(this.getKeyTuple(e));
+					if (!filter(row as Row<T>)) return EMPTY;
+					if (e.kind === "insert") {
+						return of([
+							[{ kind: "add", row: e.row }],
+							{
+								rows: page.rows,
+								rowCount: page.rowCount,
+								endCursor: page.endCursor,
+								startCursor: page.startCursor,
+							},
+						]);
+					}
+					if (e.kind === "delete") {
+						return of([
+							[{ kind: "remove", key: e.key }],
+							{
+								rows: page.rows,
+								rowCount: page.rowCount,
+								endCursor: page.endCursor,
+								startCursor: page.startCursor,
+							},
+						]);
+					}
+
+					return EMPTY;
+				}),
+				share({
+					resetOnRefCountZero: () =>
+						timer(10 * 1000).pipe(
+							tap(() => {
+								// this.rows.delete(this.getKeyTuple(e));
+							}),
+						),
+				}),
+			),
+		);
 	}
 
 	private getKeyTuple<T extends TableBase>(
@@ -105,6 +162,16 @@ export class Table<T extends TableBase>
 					(pk: PrimaryKey<T>[number]) => event.key[pk],
 				) as unknown as PrimaryKeyTuple<T>;
 		}
+	}
+
+	private getRow(key: PrimaryKeyTuple<T>) {
+		const cacheRow = this.rows.get(key);
+		if (cacheRow !== undefined) return cacheRow;
+		return this.storage.findUnique(
+			Object.fromEntries(
+				this.primaryKeys.map((pk, i) => [pk, key[i]]),
+			) as PrimaryKeyRecord<T>,
+		);
 	}
 
 	private storage: Storage<T>;

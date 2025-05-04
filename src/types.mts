@@ -23,7 +23,7 @@ export type PrimaryKeyTuple<T extends TableBase> =
 export type PageDelta<T extends TableBase> = (
 	| {
 			kind: "remove";
-			key: PrimaryKey<T>;
+			key: PrimaryKeyRecord<T>;
 	  }
 	| {
 			kind: "add";
@@ -59,28 +59,43 @@ export type TableEvent<T extends TableBase> =
 	  };
 
 export type Page<T extends TableBase> = {
-	rows: Iterable<PrimaryKey<T>>;
+	rows: Iterable<PrimaryKeyRecord<T>>;
 	rowCount: number;
 	endCursor: unknown;
 	startCursor: unknown;
 };
 
-export type PageInput<T extends TableBase> = {
-	filter?: SqlExpression<T, unknown>;
-	after?: PrimaryKey<T>;
-	before?: PrimaryKey<T>;
-	first?: number;
-	last?: number;
+// Left-closed: only after is set
+export type PageInputLeftClosed<T extends TableBase> = {
+	after?: PrimaryKeyRecord<T>;
+	first: number;
+};
+
+// Right-closed: only before is set
+export type PageInputRightClosed<T extends TableBase> = {
+	before?: PrimaryKeyRecord<T>;
+	last: number;
+};
+
+export type PageInput<T extends TableBase> = (
+	| PageInputLeftClosed<T>
+	| PageInputRightClosed<T>
+) & {
 	orderBy?: {
 		column: ColumnName<T>;
 		direction: "asc" | "desc";
 	}[];
+	filter?: SqlExpression<T, unknown>;
 };
+
+export type PageInputDelta<T extends TableBase> =
+	| { kind: "loadPrev"; count?: number }
+	| { kind: "loadNext"; count?: number };
 
 export type SqlExpression<T extends TableBase, V = unknown> =
 	| {
 			kind: "column";
-			name: keyof T["columns"];
+			name: string & keyof T["columns"];
 	  }
 	| {
 			kind: "constant";
@@ -108,11 +123,6 @@ export type SqlExpression<T extends TableBase, V = unknown> =
 			expression: SqlExpression<T, unknown>;
 			operator: "-" | "+";
 	  };
-
-function findOne<T extends TableBase>(table: T) {
-	const columns = table.columns as T["columns"];
-	const key = table.primaryKey[0];
-}
 
 type LeftJoin<
 	T1 extends TableBase,
