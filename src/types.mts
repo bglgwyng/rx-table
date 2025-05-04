@@ -11,9 +11,14 @@ export type PrimaryKey<T extends TableBase> = T["primaryKey"];
 export type PrimaryKeyRecord<T extends TableBase> = {
 	[key in PrimaryKey<T>[number]]: T["columns"][key];
 };
-export type PrimaryKeyTuple<T extends TableBase> = {
-	[key in number & keyof Row<T> & PrimaryKey<T>]: Row<T>[key];
-};
+export type PrimaryKeyTuple<T extends TableBase> =
+	PrimaryKey<T> extends readonly (infer K)[]
+		? {
+				[I in keyof PrimaryKey<T>]: K extends keyof T["columns"]
+					? T["columns"][K]
+					: never;
+			}
+		: never;
 
 export type PageDelta<T extends TableBase> = (
 	| {
