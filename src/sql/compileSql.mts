@@ -1,5 +1,5 @@
 import assert from "assert";
-import type { TableBase, Row } from "../types/Table.mjs";
+import type { TableSchemaBase, Row } from "../types/TableSchema.mjs";
 import {
 	isParameterizable,
 	type Parameterizable,
@@ -8,7 +8,7 @@ import {
 import type { Source } from "./Sql.mjs";
 
 function* renderSqlExpression(
-	expr: SqlExpression<TableBase>,
+	expr: SqlExpression<TableSchemaBase>,
 ): Generator<Parameterizable, string> {
 	if (expr.kind === "binOp") {
 		const left = yield* renderSqlExpression(expr.left);
@@ -42,8 +42,8 @@ function* renderSqlExpression(
 	assert.fail("Unsupported expression type in renderExpression");
 }
 
-function* renderSql(
-	sqlAst: Source<TableBase>,
+export function* renderSql(
+	sqlAst: Source<TableSchemaBase>,
 ): Generator<Parameterizable, string> {
 	switch (sqlAst.kind) {
 		case "select": {
@@ -67,21 +67,23 @@ function* renderSql(
 			return sql;
 		}
 		case "insert": {
-			const keys: (keyof Row<TableBase>)[] = Object.keys(
+			const keys: (keyof Row<TableSchemaBase>)[] = Object.keys(
 				sqlAst.values,
-			) as (keyof Row<TableBase>)[];
+			) as (keyof Row<TableSchemaBase>)[];
 			let sql = `INSERT INTO ${sqlAst.table} (${keys.join(", ")}) VALUES (`;
 			const placeholders: string[] = [];
 			for (const k of keys) {
 				// biome-ignore lint/style/noNonNullAssertion: <explanation>
-				placeholders.push(yield sqlAst.values[k as keyof Row<TableBase>]!);
+				placeholders.push(
+					yield sqlAst.values[k as keyof Row<TableSchemaBase>]!,
+				);
 			}
 			sql += placeholders.join(", ");
 			sql += ")";
 			return sql;
 		}
 		case "update": {
-			const keys = Object.keys(sqlAst.set) as (keyof Row<TableBase>)[];
+			const keys = Object.keys(sqlAst.set) as (keyof Row<TableSchemaBase>)[];
 			let sql = `UPDATE ${sqlAst.table} SET `;
 			const setClauses: string[] = [];
 			for (const k of keys) {
@@ -90,7 +92,7 @@ function* renderSql(
 			sql += setClauses.join(", ");
 			for (const k of keys) {
 				// biome-ignore lint/style/noNonNullAssertion: <explanation>
-				yield sqlAst.set[k as keyof Row<TableBase>]!;
+				yield sqlAst.set[k as keyof Row<TableSchemaBase>]!;
 			}
 			if (sqlAst.where) {
 				const whereSql = yield* renderSqlExpression(sqlAst.where);
@@ -109,9 +111,9 @@ function* renderSql(
 	}
 }
 
-export function compileSqlExpression<Table extends TableBase = TableBase>(
-	expr: SqlExpression<Table>,
-): [sql: string, (context: unknown) => unknown[]] {
+export function compileSqlExpression<
+	Table extends TableSchemaBase = TableSchemaBase,
+>(expr: SqlExpression<Table>): [sql: string, (context: unknown) => unknown[]] {
 	const gen = renderSqlExpression(expr);
 	const params: Parameterizable[] = [];
 	let next = gen.next();
@@ -129,7 +131,7 @@ export function compileSqlExpression<Table extends TableBase = TableBase>(
 	];
 }
 
-export function compileSql<Table extends TableBase = TableBase>(
+export function compileSql<Table extends TableSchemaBase = TableSchemaBase>(
 	sqlAst: Source<Table>,
 ): [sql: string, (context: unknown) => unknown[]] {
 	const gen = renderSql(sqlAst);

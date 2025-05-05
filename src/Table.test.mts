@@ -2,28 +2,31 @@ import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 import { Table } from "./Table.mjs";
 import { BetterSqlite3Storage } from "./storages/better-sqlite3/BetterSqlite3Storage.mjs";
+import type { TableSchemaBase } from "./types/TableSchema.mjs";
 
-type UserTable = {
+const userTableSchema = {
+	name: "User",
 	columns: {
-		id: number;
-		name: string;
-	};
-	primaryKey: ["id"];
-};
+		id: { kind: "number" },
+		name: { kind: "string" },
+	},
+	primaryKey: ["id"] as const,
+} satisfies TableSchemaBase;
+type UserTable = typeof userTableSchema;
 
 function createSqliteStorage() {
 	const db = new Database(":memory:");
-	db.exec(`CREATE TABLE users (
+	db.exec(`CREATE TABLE "User" (
     id INTEGER PRIMARY KEY,
     name TEXT
   )`);
-	return new BetterSqlite3Storage<UserTable>(db, "users", ["id"]);
+	return new BetterSqlite3Storage<UserTable>(userTableSchema, db);
 }
 
 describe("Table", () => {
 	function setup() {
 		const storage = createSqliteStorage();
-		const table = new Table(["id"], storage);
+		const table = new Table<UserTable>(userTableSchema, storage);
 		return { storage, table };
 	}
 

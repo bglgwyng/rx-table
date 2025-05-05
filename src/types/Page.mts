@@ -1,7 +1,12 @@
 import type { SqlExpression } from "../sql/SqlExpression.mjs";
-import type { TableBase, PrimaryKeyRecord, Row, ColumnName } from "./Table.mjs";
+import type {
+	TableSchemaBase,
+	PrimaryKeyRecord,
+	Row,
+	ColumnName,
+} from "./TableSchema.mjs";
 
-export type PageDelta<T extends TableBase> = (
+export type PageDelta<T extends TableSchemaBase> = (
 	| {
 			kind: "remove";
 			key: PrimaryKeyRecord<T>;
@@ -12,7 +17,7 @@ export type PageDelta<T extends TableBase> = (
 	  }
 )[];
 
-export type Page<T extends TableBase> = {
+export type Page<T extends TableSchemaBase> = {
 	rows: Iterable<PrimaryKeyRecord<T>>;
 	rowCount: number;
 	endCursor: unknown;
@@ -20,20 +25,20 @@ export type Page<T extends TableBase> = {
 };
 // Left-closed: only after is set
 
-export type PageInputLeftClosed<T extends TableBase> = {
+export type PageInputLeftClosed<T extends TableSchemaBase> = {
 	kind: "leftClosed";
 	after?: PrimaryKeyRecord<T>;
 	first: number;
 };
 // Right-closed: only before is set
 
-export type PageInputRightClosed<T extends TableBase> = {
+export type PageInputRightClosed<T extends TableSchemaBase> = {
 	kind: "rightClosed";
 	before?: PrimaryKeyRecord<T>;
 	last: number;
 };
 
-export type PageInput<T extends TableBase> = (
+export type PageInput<T extends TableSchemaBase> = (
 	| PageInputLeftClosed<T>
 	| PageInputRightClosed<T>
 ) & {
@@ -44,7 +49,7 @@ export type PageInput<T extends TableBase> = (
 	filter?: SqlExpression<T, unknown>;
 };
 
-export type PageInputDelta<T extends TableBase> =
+export type PageInputDelta<T extends TableSchemaBase> =
 	| { kind: "loadPrev"; count?: number }
 	| { kind: "loadNext"; count?: number };
 

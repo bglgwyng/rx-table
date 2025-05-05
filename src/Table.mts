@@ -19,22 +19,22 @@ import type {
 	ReadableTable,
 	TableEvent,
 	WritableTable,
-} from "./types/Table.mjs";
+} from "./types/TableSchema.mjs";
 import type {
 	PrimaryKey,
 	PrimaryKeyRecord,
 	PrimaryKeyTuple,
 	Row,
-} from "./types/Table.mjs";
-import type { TableBase } from "./types/Table.mjs";
+} from "./types/TableSchema.mjs";
+import type { TableSchemaBase } from "./types/TableSchema.mjs";
 import { partitionByKey } from "./util/partitionByKey.mjs";
 import { sqlExpressionToFilterFn } from "./util/sqlExpressionToFilterFn.mjs";
 
-export class Table<T extends TableBase>
+export class Table<T extends TableSchemaBase>
 	implements ReadableTable<T>, WritableTable<T>
 {
 	constructor(
-		private primaryKeys: PrimaryKey<T>,
+		private tableSchema: T,
 		storage: Storage<T>,
 	) {
 		this.storage = storage;
@@ -59,7 +59,7 @@ export class Table<T extends TableBase>
 	}
 
 	findUnique(key: PrimaryKeyRecord<T>): Dynamic<Row<T> | null, void> {
-		const keyTuple = this.primaryKeys.map(
+		const keyTuple = this.tableSchema.primaryKey.map(
 			(pk: PrimaryKey<T>[number]) => key[pk],
 		) as unknown as PrimaryKeyTuple<T>;
 
@@ -71,12 +71,14 @@ export class Table<T extends TableBase>
 		dynamic = createDynamic<Row<T> | null, void>(
 			row,
 			this.getRowEvent(keyTuple).pipe(
-				map((e) => {
+				// biome-ignore lint/suspicious/noConfusingVoidType: <explanation>
+				map((e): [void, Row<T> | null] => {
 					if (e.kind === "insert") {
 						return [void 0, e.row] as const;
 					}
 					if (e.kind === "update") {
-						return [void 0, { ...row, ...e.row }] as const;
+						// biome-ignore lint/style/noNonNullAssertion: <explanation>
+						return [void 0, { ...row!, ...e.row }] as const;
 					}
 					if (e.kind === "delete") {
 						return [void 0, null] as const;
@@ -145,20 +147,20 @@ export class Table<T extends TableBase>
 		);
 	}
 
-	private getKeyTuple<T extends TableBase>(
+	private getKeyTuple<T extends TableSchemaBase>(
 		event: TableEvent<T>,
 	): PrimaryKeyTuple<T> {
 		switch (event.kind) {
 			case "insert":
-				return this.primaryKeys.map(
+				return this.tableSchema.primaryKey.map(
 					(pk: PrimaryKey<T>[number]) => event.row[pk],
 				) as unknown as PrimaryKeyTuple<T>;
 			case "update":
-				return this.primaryKeys.map(
+				return this.tableSchema.primaryKey.map(
 					(pk: PrimaryKey<T>[number]) => event.key[pk],
 				) as unknown as PrimaryKeyTuple<T>;
 			case "delete":
-				return this.primaryKeys.map(
+				return this.tableSchema.primaryKey.map(
 					(pk: PrimaryKey<T>[number]) => event.key[pk],
 				) as unknown as PrimaryKeyTuple<T>;
 		}
@@ -169,8 +171,8 @@ export class Table<T extends TableBase>
 		if (cacheRow !== undefined) return cacheRow;
 		return this.storage.findUnique(
 			Object.fromEntries(
-				this.primaryKeys.map((pk, i) => [pk, key[i]]),
-			) as PrimaryKeyRecord<T>,
+				this.tableSchema.primaryKey.map((pk, i) => [pk, key[i]] as const),
+			) as unknown as PrimaryKeyRecord<T>,
 		);
 	}
 

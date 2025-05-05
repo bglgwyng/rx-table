@@ -3,12 +3,24 @@ import { compileSql, compileSqlExpression } from "./compileSql.mjs";
 import type { SqlExpression, TupleExpression } from "./SqlExpression.mjs";
 import type { Source } from "./Sql.mjs";
 
-type Table = {
+type ColumnType = {
+	kind: "number" | "string";
+};
+
+type TableBase = {
+	name: string;
+	columns: Record<string, ColumnType>;
+	primaryKey: string[];
+};
+
+type Table = TableBase & {
 	columns: {
-		foo: string;
+		foo: { kind: "number" };
+		bar: { kind: "string" };
 	};
 	primaryKey: ["foo"];
 };
+
 describe("compileSql", () => {
 	it("renders simple column expression with compileSqlExpression", () => {
 		const expr: SqlExpression<Table> = { kind: "column", name: "foo" };

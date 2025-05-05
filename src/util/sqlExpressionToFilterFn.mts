@@ -1,8 +1,8 @@
 import type { SqlExpression } from "../sql/SqlExpression.mjs";
-import type { Row } from "../types/Table.mjs";
-import type { TableBase } from "../types/Table.mjs";
+import type { Row } from "../types/TableSchema.mjs";
+import type { TableSchemaBase } from "../types/TableSchema.mjs";
 
-export function sqlExpressionToFilterFn<T extends TableBase>(
+export function sqlExpressionToFilterFn<T extends TableSchemaBase>(
 	condition: SqlExpression<T>,
 ): (value: Row<T>) => boolean {
 	// biome-ignore lint/suspicious/noExplicitAny: <explanation>

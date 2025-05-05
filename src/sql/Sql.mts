@@ -1,4 +1,4 @@
-import type { TableBase, Row } from "../types/Table.mjs";
+import type { TableSchemaBase, Row } from "../types/TableSchema.mjs";
 import type { Parameterizable, SqlExpression } from "./SqlExpression.mjs";
 
 export type SqlOrderBy = {
@@ -6,7 +6,7 @@ export type SqlOrderBy = {
 	direction: "asc" | "desc";
 };
 
-export type Select<Table extends TableBase = TableBase> = {
+export type Select<Table extends TableSchemaBase = TableSchemaBase> = {
 	kind: "select";
 	table: string;
 	columns: "*";
@@ -15,7 +15,7 @@ export type Select<Table extends TableBase = TableBase> = {
 	limit?: Parameterizable;
 };
 
-export type Insert<Table extends TableBase = TableBase> = {
+export type Insert<Table extends TableSchemaBase = TableSchemaBase> = {
 	kind: "insert";
 	table: string;
 	values: {
@@ -23,7 +23,7 @@ export type Insert<Table extends TableBase = TableBase> = {
 	};
 };
 
-export type Update<Table extends TableBase = TableBase> = {
+export type Update<Table extends TableSchemaBase = TableSchemaBase> = {
 	kind: "update";
 	table: string;
 	set: {
@@ -32,13 +32,13 @@ export type Update<Table extends TableBase = TableBase> = {
 	where?: SqlExpression<Table>;
 };
 
-export type Delete<Table extends TableBase = TableBase> = {
+export type Delete<Table extends TableSchemaBase = TableSchemaBase> = {
 	kind: "delete";
 	table: string;
 	where?: SqlExpression<Table>;
 };
 
-export type Source<Table extends TableBase = TableBase> =
+export type Source<Table extends TableSchemaBase = TableSchemaBase> =
 	| Select<Table>
 	| Insert<Table>
 	| Update<Table>

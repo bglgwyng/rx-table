@@ -1,15 +1,21 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type { Storage } from "../Storage.mjs";
-import type { Row, PrimaryKeyRecord } from "../types/Table.mjs";
+import type {
+	Row,
+	PrimaryKeyRecord,
+	TableSchemaBase,
+} from "../types/TableSchema.mjs";
 
 // UserTable 타입 정의 (테스트 목적)
-export type UserTable = {
+export const userTableSchema = {
+	name: "User",
 	columns: {
-		id: number;
-		name: string;
-	};
-	primaryKey: ["id"];
-};
+		id: { kind: "number" },
+		name: { kind: "string" },
+	},
+	primaryKey: ["id"] as const,
+} satisfies TableSchemaBase;
+type UserTable = typeof userTableSchema;
 
 type TestRow = Row<UserTable>;
 type TestKey = PrimaryKeyRecord<UserTable>;

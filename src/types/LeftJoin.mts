@@ -1,8 +1,8 @@
-import type { TableBase, ColumnName } from "./Table.mjs";
+import type { TableSchemaBase, ColumnName } from "./TableSchema.mjs";
 
 export type LeftJoin<
-	T1 extends TableBase,
-	T2 extends TableBase,
+	T1 extends TableSchemaBase,
+	T2 extends TableSchemaBase,
 	A1 extends string,
 	A2 extends string,
 	On extends Partial<Record<ColumnName<T1>, ColumnName<T2>>>,

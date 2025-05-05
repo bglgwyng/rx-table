@@ -9,20 +9,32 @@ import {
 	type Page,
 	type PageInput,
 } from "../../types/Page.mjs";
-import type { PrimaryKey, PrimaryKeyRecord, Row } from "../../types/Table.mjs";
-import type { TableBase } from "../../types/Table.mjs";
+import type {
+	PrimaryKey,
+	PrimaryKeyRecord,
+	Row,
+} from "../../types/TableSchema.mjs";
+import type { TableSchemaBase } from "../../types/TableSchema.mjs";
 import { compileSql } from "../../sql/compileSql.mjs";
-import assert from "assert";
 import type { Source } from "../../sql/Sql.mjs";
-import {
-	ands,
-	type Parameterizable,
-	type SqlExpression,
-} from "../../sql/SqlExpression.mjs";
+import { ands, type SqlExpression } from "../../sql/SqlExpression.mjs";
 
-export class BetterSqlite3Storage<Table extends TableBase>
+export class BetterSqlite3Storage<Table extends TableSchemaBase>
 	implements WritableStorage<Table>, ReadableStorage<Table>
 {
+	constructor(
+		public readonly schema: Table,
+		public readonly database: Database,
+	) {}
+
+	get tableName() {
+		return this.schema.name;
+	}
+
+	get primaryKeys() {
+		return this.schema.primaryKey;
+	}
+
 	mutate(mutation: Mutation<Table>): void {
 		switch (mutation.type) {
 			case "insert":
@@ -49,12 +61,6 @@ export class BetterSqlite3Storage<Table extends TableBase>
 			}
 		})();
 	}
-
-	constructor(
-		public readonly database: Database,
-		public readonly tableName: string,
-		public readonly primaryKeys: PrimaryKey<Table>,
-	) {}
 
 	/**
 	 * Insert a new row into the table

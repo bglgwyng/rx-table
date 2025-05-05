@@ -2,14 +2,18 @@ import Database from "better-sqlite3";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Mutation } from "../../Storage.mjs";
 import { BetterSqlite3Storage } from "./BetterSqlite3Storage.mjs";
+import type { TableSchemaBase } from "../../types/TableSchema.mjs";
 
-type UserTable = {
+const userSchema: TableSchemaBase = {
+	name: "users",
 	columns: {
-		id: number;
-		name: string;
-	};
-	primaryKey: ["id"];
+		id: { kind: "number" },
+		name: { kind: "string" },
+	},
+	primaryKey: ["id"] as const,
 };
+
+type UserTable = typeof userSchema;
 
 describe("SqliteStorage.mutate", () => {
 	let storage: BetterSqlite3Storage<UserTable>;
@@ -20,7 +24,7 @@ describe("SqliteStorage.mutate", () => {
       id INTEGER PRIMARY KEY,
       name TEXT
     )`);
-		storage = new BetterSqlite3Storage<UserTable>(db, "users", ["id"]);
+		storage = new BetterSqlite3Storage<UserTable>(userSchema, db); // already fixed
 	});
 
 	it("mutate: insert/update/delete/upsert", () => {

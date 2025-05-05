@@ -3,22 +3,23 @@ import Database from "better-sqlite3";
 import { BetterSqlite3Storage } from "./BetterSqlite3Storage.mjs";
 import { sqlExpressionToFilterFn } from "../../util/sqlExpressionToFilterFn.mjs";
 import type { PageInput } from "../../types/Page.mjs";
-import type { Row } from "../../types/Table.mjs";
-import type {
-	SqlExpression,
-	TupleExpression,
-} from "../../sql/SqlExpression.mjs";
-import { compileSql, renderSql } from "../../sql/compileSql.mjs";
+import type { Row } from "../../types/TableSchema.mjs";
+import type { SqlExpression } from "../../sql/SqlExpression.mjs";
+import type { TableSchemaBase } from "../../types/TableSchema.mjs";
+import { compileSql } from "../../sql/compileSql.mjs";
 import type { Source } from "../../sql/Sql.mjs";
 
-type UserTable = {
+const userSchema = {
+	name: "users",
 	columns: {
-		id: number;
-		name: string;
-		age: number;
-	};
-	primaryKey: ["id"];
-};
+		id: { kind: "number" },
+		name: { kind: "string" },
+		age: { kind: "number" },
+	},
+	primaryKey: ["id"] as const,
+} satisfies TableSchemaBase;
+
+type UserTable = typeof userSchema;
 
 describe("SqliteStorage.findMany", () => {
 	let db: Database.Database;
@@ -29,7 +30,7 @@ describe("SqliteStorage.findMany", () => {
 		db.exec(
 			"CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)",
 		);
-		storage = new BetterSqlite3Storage<UserTable>(db, "users", ["id"]);
+		storage = new BetterSqlite3Storage<UserTable>(userSchema, db);
 		// Insert sample data
 		for (let i = 1; i <= 10; ++i) {
 			storage.insert({ id: i, name: `User${i}`, age: 20 + i });
@@ -159,61 +160,75 @@ describe("SqliteStorage.findMany", () => {
 	});
 });
 
-type CompositeTable = {
-  columns: {
-    id: number;
-    sub_id: number;
-    name: string;
-  };
-  primaryKey: ["id", "sub_id"];
-};
+const compositeTableSchema = {
+	name: "composite",
+	columns: {
+		id: { kind: "number" },
+		sub_id: { kind: "number" },
+		name: { kind: "string" },
+	},
+	primaryKey: ["id", "sub_id"] as const,
+} satisfies TableSchemaBase;
+type CompositeTable = typeof compositeTableSchema;
 
 describe("SqliteStorage.findMany with composite key", () => {
-  let db: Database.Database;
-  let storage: BetterSqlite3Storage<CompositeTable>;
+	let db: Database.Database;
+	let storage: BetterSqlite3Storage<CompositeTable>;
 
-  beforeEach(() => {
-    db = new Database(":memory:");
-    db.exec(
-      "CREATE TABLE composite (id INTEGER, sub_id INTEGER, name TEXT, PRIMARY KEY (id, sub_id))"
-    );
-    storage = new BetterSqlite3Storage<CompositeTable>(db, "composite", ["id", "sub_id"]);
-    // Insert sample data: id 1~3, sub_id 1~2
-    for (let id = 1; id <= 3; ++id) {
-      for (let sub_id = 1; sub_id <= 2; ++sub_id) {
-        storage.insert({ id, sub_id, name: `User${id}_${sub_id}` });
-      }
-    }
-  });
+	beforeEach(() => {
+		db = new Database(":memory:");
+		db.exec(
+			"CREATE TABLE composite (id INTEGER, sub_id INTEGER, name TEXT, PRIMARY KEY (id, sub_id))",
+		);
+		storage = new BetterSqlite3Storage<CompositeTable>(
+			compositeTableSchema,
+			db,
+		);
+		// Insert sample data: id 1~3, sub_id 1~2
+		for (let id = 1; id <= 3; ++id) {
+			for (let sub_id = 1; sub_id <= 2; ++sub_id) {
+				storage.insert({ id, sub_id, name: `User${id}_${sub_id}` });
+			}
+		}
+	});
 
-  it("fetches all rows sequentially using composite cursor", () => {
-    const pageSize = 2;
-    let after: { id: number; sub_id: number } | undefined = undefined;
-    const allFetched: Array<{ id: number; sub_id: number }> = [];
-    while (true) {
-      const pageInput = {
-        kind: "leftClosed" as const,
-        first: pageSize,
-        orderBy: [
-          { column: "id" as keyof CompositeTable["columns"], direction: "asc" as const },
-          { column: "sub_id" as keyof CompositeTable["columns"], direction: "asc" as const },
-        ],
-        ...(after ? { after } : {}),
-      };
-      const page = storage.findMany(pageInput);
-      const keys = Array.from(page.rows);
-      // Debug: log actual rows returned
-      // eslint-disable-next-line no-console
-      console.log('DEBUG composite page.rows:', page.rows);
-      if (keys.length === 0) break;
-      allFetched.push(...keys);
-      if (keys.length < pageSize) break;
-      after = keys[keys.length - 1];
-    }
-    expect(allFetched).toEqual([
-      { id: 1, sub_id: 1 }, { id: 1, sub_id: 2 },
-      { id: 2, sub_id: 1 }, { id: 2, sub_id: 2 },
-      { id: 3, sub_id: 1 }, { id: 3, sub_id: 2 },
-    ]);
-  });
+	it("fetches all rows sequentially using composite cursor", () => {
+		const pageSize = 2;
+		let after: { id: number; sub_id: number } | undefined = undefined;
+		const allFetched: Array<{ id: number; sub_id: number }> = [];
+		while (true) {
+			const pageInput = {
+				kind: "leftClosed" as const,
+				first: pageSize,
+				orderBy: [
+					{
+						column: "id" as keyof CompositeTable["columns"],
+						direction: "asc" as const,
+					},
+					{
+						column: "sub_id" as keyof CompositeTable["columns"],
+						direction: "asc" as const,
+					},
+				],
+				...(after ? { after } : {}),
+			};
+			const page = storage.findMany(pageInput);
+			const keys = Array.from(page.rows);
+			// Debug: log actual rows returned
+			// eslint-disable-next-line no-console
+			console.log("DEBUG composite page.rows:", page.rows);
+			if (keys.length === 0) break;
+			allFetched.push(...keys);
+			if (keys.length < pageSize) break;
+			after = keys[keys.length - 1];
+		}
+		expect(allFetched).toEqual([
+			{ id: 1, sub_id: 1 },
+			{ id: 1, sub_id: 2 },
+			{ id: 2, sub_id: 1 },
+			{ id: 2, sub_id: 2 },
+			{ id: 3, sub_id: 1 },
+			{ id: 3, sub_id: 2 },
+		]);
+	});
 });

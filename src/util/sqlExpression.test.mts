@@ -1,23 +1,25 @@
 import { describe, it, expect } from "vitest";
 import { sqlExpressionToFilterFn } from "./sqlExpressionToFilterFn.mjs";
-import type { Row } from "../types/Table.mjs";
-import type { TableBase } from "../types/Table.mjs";
+import type { Row } from "../types/TableSchema.mjs";
+import type { TableSchemaBase } from "../types/TableSchema.mjs";
 import type { SqlExpression } from "../sql/SqlExpression.mjs";
 
-type SimpleTable = {
+const userTableSchema = {
+	name: "User",
 	columns: {
-		id: number;
-		age: number;
-		name: string;
-	};
-	primaryKey: ["id"];
-};
+		id: { kind: "number" },
+		age: { kind: "number" },
+		name: { kind: "string" },
+	},
+	primaryKey: ["id"],
+} satisfies TableSchemaBase;
+type UserTable = typeof userTableSchema;
 
-const row: Row<SimpleTable> = { id: 1, age: 30, name: "Alice" };
+const row: Row<UserTable> = { id: 1, age: 30, name: "Alice" };
 
 describe("sqlExpressionToFilterFn", () => {
 	it("handles column = constant", () => {
-		const expr: SqlExpression<SimpleTable> = {
+		const expr: SqlExpression<UserTable> = {
 			kind: "binOp",
 			operator: "=",
 			left: { kind: "column", name: "age" },
@@ -29,7 +31,7 @@ describe("sqlExpressionToFilterFn", () => {
 	});
 
 	it("handles != operator", () => {
-		const expr: SqlExpression<SimpleTable> = {
+		const expr: SqlExpression<UserTable> = {
 			kind: "binOp",
 			operator: "!=",
 			left: { kind: "column", name: "name" },
@@ -41,7 +43,7 @@ describe("sqlExpressionToFilterFn", () => {
 	});
 
 	it("handles <, <=, >, >= operators", () => {
-		const expr: SqlExpression<SimpleTable> = {
+		const expr: SqlExpression<UserTable> = {
 			kind: "binOp",
 			operator: ">",
 			left: { kind: "column", name: "age" },
@@ -53,7 +55,7 @@ describe("sqlExpressionToFilterFn", () => {
 	});
 
 	it("handles arithmetic operators", () => {
-		const expr: SqlExpression<SimpleTable> = {
+		const expr: SqlExpression<UserTable> = {
 			kind: "binOp",
 			operator: "+",
 			left: { kind: "column", name: "age" },
@@ -70,7 +72,7 @@ describe("sqlExpressionToFilterFn", () => {
 	});
 
 	it("handles unary operators", () => {
-		const expr: SqlExpression<SimpleTable> = {
+		const expr: SqlExpression<UserTable> = {
 			kind: "binOp",
 			operator: "=",
 			left: {
@@ -85,7 +87,7 @@ describe("sqlExpressionToFilterFn", () => {
 	});
 
 	it("handles nested expressions", () => {
-		const expr: SqlExpression<SimpleTable> = {
+		const expr: SqlExpression<UserTable> = {
 			kind: "binOp",
 			operator: "=",
 			left: {

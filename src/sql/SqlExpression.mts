@@ -1,6 +1,6 @@
-import type { TableBase } from "../types/Table.mjs";
+import type { TableSchemaBase } from "../types/TableSchema.mjs";
 
-export type ColumnExpression<T extends TableBase> = {
+export type ColumnExpression<T extends TableSchemaBase> = {
 	kind: "column";
 	name: string & keyof T["columns"];
 };
@@ -13,7 +13,7 @@ export type ParameterExpression = {
 	getValue(context: unknown): unknown;
 };
 
-export type BinOpExpression<T extends TableBase> = {
+export type BinOpExpression<T extends TableSchemaBase> = {
 	kind: "binOp";
 	left: SqlExpression<T, unknown>;
 	right: SqlExpression<T, unknown>;
@@ -32,18 +32,18 @@ export type BinOpExpression<T extends TableBase> = {
 		| "AND"
 		| "OR";
 };
-export type UnOpExpression<T extends TableBase> = {
+export type UnOpExpression<T extends TableSchemaBase> = {
 	kind: "unOp";
 	expression: SqlExpression<T, unknown>;
 	operator: "-" | "+" | "NOT";
 };
 
-export type TupleExpression<T extends TableBase> = {
+export type TupleExpression<T extends TableSchemaBase> = {
 	kind: "tuple";
 	expressions: SqlExpression<T, unknown>[];
 };
 
-export type SqlExpression<T extends TableBase, V = unknown> =
+export type SqlExpression<T extends TableSchemaBase, V = unknown> =
 	| ColumnExpression<T>
 	| ConstantExpression<V>
 	| ParameterExpression
@@ -54,12 +54,12 @@ export type SqlExpression<T extends TableBase, V = unknown> =
 export type Parameterizable = ConstantExpression | ParameterExpression;
 
 export function isParameterizable(
-	expr: SqlExpression<TableBase>,
+	expr: SqlExpression<TableSchemaBase>,
 ): expr is Parameterizable {
 	return expr.kind === "constant" || expr.kind === "parameter";
 }
 
-export function ands<T extends TableBase>(
+export function ands<T extends TableSchemaBase>(
 	exprs: SqlExpression<T>[],
 ): SqlExpression<T> | undefined {
 	if (exprs.length === 0) return undefined;
