@@ -17,7 +17,11 @@ import type {
 import type { TableSchemaBase } from "../../types/TableSchema.mjs";
 import { compileSql } from "../../sql/compileSql.mjs";
 import type { Source } from "../../sql/Sql.mjs";
-import { ands, type SqlExpression } from "../../sql/SqlExpression.mjs";
+import {
+	ands,
+	type ParameterExpression,
+	type SqlExpression,
+} from "../../sql/SqlExpression.mjs";
 
 export class BetterSqlite3Storage<Table extends TableSchemaBase>
 	implements WritableStorage<Table>, ReadableStorage<Table>
@@ -99,19 +103,66 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 	 * Update a row based on its primary key
 	 */
 	update(key: PrimaryKeyRecord<Table>, changes: Partial<Row<Table>>): void {
-		const setClause = Object.keys(changes)
-			.map((k) => `${k} = ?`)
-			.join(", ");
-		const values = Object.values(changes);
-		const keyArr = this.primaryKeys.map(
-			(pk: PrimaryKey<Table>[number]) => key[pk],
-		);
-		const stmt = this.database.prepare(`
-			UPDATE ${this.tableName}
-			SET ${setClause}
-			WHERE ${this.primaryKeys.map((pk) => `${pk} = ?`).join(" AND ")}
-		`);
-		stmt.run(...values, ...keyArr);
+		const columns = Object.keys(changes) as (keyof Row<Table>)[];
+		if (columns.length === 0) return;
+
+		const set = Object.fromEntries(
+			columns.map((col) => [
+				col,
+				{
+					kind: "parameter" as const,
+					getValue: (ctx: {
+						changes: Partial<Row<Table>>;
+						key: PrimaryKeyRecord<Table>;
+					}) => ctx.changes[col],
+				} as ParameterExpression,
+			]),
+		) as Record<keyof Row<Table>, ParameterExpression>;
+
+		const pkColumns = {
+			kind: "tuple" as const,
+			expressions: this.primaryKeys.map((pk) => ({
+				kind: "column" as const,
+				name: pk,
+			})),
+		};
+		const pkParams = {
+			kind: "tuple" as const,
+			expressions: this.primaryKeys.map(
+				(pk) =>
+					({
+						kind: "parameter" as const,
+						getValue: (ctx: {
+							changes: Partial<Row<Table>>;
+							key: PrimaryKeyRecord<Table>;
+						}) => ctx.key[pk],
+					}) as import("../../sql/SqlExpression.mts").ParameterExpression,
+			),
+		};
+		const where: SqlExpression<Table> = {
+			kind: "binOp" as const,
+			operator: "=",
+			left: pkColumns,
+			right: pkParams,
+		};
+
+		const updateAst: Source<Table> = {
+			kind: "update" as const,
+			table: this.tableName,
+			set,
+			where,
+		};
+
+		const [sql, getParamsRaw] = compileSql(updateAst);
+		const getParams = (
+			changes: Partial<Row<Table>>,
+			key: PrimaryKeyRecord<Table>,
+		) => {
+			return getParamsRaw({ changes, key });
+		};
+
+		const stmt = this.database.prepare(sql);
+		stmt.run(...getParams(changes, key));
 	}
 
 	delete(key: PrimaryKeyRecord<Table>): void {
