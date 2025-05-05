@@ -145,36 +145,28 @@ export class BetterSqlite3Storage<Table extends TableBase>
 	): CompiledQuery<PageParameter<HasCursor>> {
 		const selectCols = "*";
 
+		const pkColumns: SqlExpression<Table> = {
+			kind: "tuple",
+			expressions: this.primaryKeys.map((pk) => ({ kind: "column", name: pk })),
+		};
+		const pkParams: SqlExpression<Table> = {
+			kind: "tuple",
+			expressions: this.primaryKeys.map(
+				(pk) =>
+					({
+						kind: "parameter",
+						getValue: (context: PageParameter<true>) =>
+							context.cursor ? context.cursor[pk] : undefined,
+					}) as SqlExpression<Table>,
+			),
+		};
 		const cursorWhere: SqlExpression<Table> | undefined = hasCursor
-			? pageInput.kind === "leftClosed"
-				? ands(
-						this.primaryKeys.map(
-							(pk): SqlExpression<Table> => ({
-								kind: "binOp",
-								operator: ">",
-								left: { kind: "column", name: pk },
-								right: {
-									kind: "parameter",
-									getValue: (context: PageParameter<true>) =>
-										context.cursor ? context.cursor[pk] : undefined,
-								},
-							}),
-						),
-					)
-				: ands(
-						this.primaryKeys.map(
-							(pk): SqlExpression<Table> => ({
-								kind: "binOp",
-								operator: "<",
-								left: { kind: "column", name: pk },
-								right: {
-									kind: "parameter",
-									getValue: (context: PageParameter<true>) =>
-										context.cursor[pk],
-								},
-							}),
-						),
-					)
+			? {
+					kind: "binOp",
+					operator: pageInput.kind === "leftClosed" ? ">" : "<",
+					left: pkColumns,
+					right: pkParams,
+				}
 			: undefined;
 
 		const ast: Source = {
