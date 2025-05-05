@@ -66,16 +66,8 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 	 * Insert a new row into the table
 	 */
 	insert(row: Row<Table>): void {
-		const columns = Object.keys(row);
-		const placeholders = columns.map(() => "?").join(", ");
-		const values = columns.map((col) => row[col]);
-
-		const stmt = this.database.prepare(`
-      INSERT INTO ${this.tableName} (${columns.join(", ")})
-      VALUES (${placeholders})
-    `);
-
-		stmt.run(...values);
+		const { statement, getParams } = this.compiledInsert;
+		statement.run(...getParams(row));
 	}
 
 	/**
@@ -123,14 +115,8 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 	}
 
 	delete(key: PrimaryKeyRecord<Table>): void {
-		const keyArr = this.primaryKeys.map(
-			(pk: PrimaryKey<Table>[number]) => key[pk],
-		);
-		const stmt = this.database.prepare(`
-			DELETE FROM ${this.tableName}
-			WHERE ${this.primaryKeys.map((pk) => `${pk} = ?`).join(" AND ")}
-		`);
-		stmt.run(...keyArr);
+		const { statement, getParams } = this.compiledDelete;
+		statement.run(...getParams(key));
 	}
 
 	findUnique(key: PrimaryKeyRecord<Table>): Row<Table> | null {
@@ -202,16 +188,20 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 		};
 
 		const [queryString, getParams] = compileSql(ast);
-		return [this.database.prepare(queryString), getParams];
+		return {
+			statement: this.database.prepare(queryString),
+			getParams,
+		};
 	}
 
 	findMany(pageInput: PageInput<Table>): Page<Table> {
 		// Build SELECT clause
-		const [stmt, getParams] = this.compileFindMany(pageInput, false);
-		const [stmtWithCursor, getParamsWithCursor] = this.compileFindMany(
+		const { statement: stmt, getParams } = this.compileFindMany(
 			pageInput,
-			true,
+			false,
 		);
+		const { statement: stmtWithCursor, getParams: getParamsWithCursor } =
+			this.compileFindMany(pageInput, true);
 
 		let rows: Row<Table>[] = [];
 		let limit = 0;
@@ -270,12 +260,80 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 			endCursor: rows.length > 0 ? getCursor(rows.at(-1)!) : undefined,
 		};
 	}
+
+	private _compiledInsert?: CompiledQuery<Row<Table>>;
+	private _compiledDelete?: CompiledQuery<PrimaryKeyRecord<Table>>;
+
+	private get compiledInsert(): CompiledQuery<Row<Table>> {
+		if (!this._compiledInsert) {
+			const columns = Object.keys(this.schema.columns);
+			const insertAst = {
+				kind: "insert" as const,
+				table: this.tableName,
+				values: Object.fromEntries(
+					columns.map((col) => [
+						col,
+						{
+							kind: "parameter" as const,
+							getValue: (row: Row<Table>) => row[col],
+						} as import("../../sql/SqlExpression.mts").ParameterExpression,
+					]),
+				),
+			};
+			const [sql, getParams] = compileSql(insertAst);
+			this._compiledInsert = {
+				statement: this.database.prepare(sql),
+				getParams,
+			};
+		}
+		return this._compiledInsert;
+	}
+
+	private get compiledDelete(): CompiledQuery<PrimaryKeyRecord<Table>> {
+		if (!this._compiledDelete) {
+			const pkColumns: SqlExpression<Table> = {
+				kind: "tuple",
+				expressions: this.primaryKeys.map((pk) => ({
+					kind: "column",
+					name: pk as string & keyof Table["columns"],
+				})),
+			};
+			const pkParams: SqlExpression<Table> = {
+				kind: "tuple",
+				expressions: this.primaryKeys.map(
+					(pk) =>
+						({
+							kind: "parameter",
+							getValue: (key: PrimaryKeyRecord<Table>) =>
+								key[pk as string & keyof Table["columns"]],
+						}) as SqlExpression<Table>,
+				),
+			};
+			const where: SqlExpression<Table> = {
+				kind: "binOp",
+				operator: "=",
+				left: pkColumns,
+				right: pkParams,
+			};
+			const deleteAst = {
+				kind: "delete" as const,
+				table: this.tableName,
+				where,
+			};
+			const [sql, getParams] = compileSql(deleteAst);
+			this._compiledDelete = {
+				statement: this.database.prepare(sql),
+				getParams,
+			};
+		}
+		return this._compiledDelete;
+	}
 }
 
-export type CompiledQuery<Context extends Record<string, unknown>> = readonly [
-	statment: Statement,
-	params: (context?: Context) => unknown[],
-];
+export type CompiledQuery<Context extends Record<string, unknown>> = {
+	statement: Statement;
+	getParams: (context?: Context) => unknown[];
+};
 
 type PageParameter<HasCursor extends boolean> = {
 	limit: number;
