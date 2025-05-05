@@ -7,9 +7,9 @@ import type { Row } from "../../types/Table.mjs";
 import type {
 	SqlExpression,
 	TupleExpression,
-} from "../../types/SqlExpression.mjs";
-import { compileSql, renderSql } from "./renderExpression.mjs";
-import type { Sql } from "../../types/Sql.mjs";
+} from "../../sql/SqlExpression.mjs";
+import { compileSql, renderSql } from "../../sql/compileSql.mjs";
+import type { Source } from "../../sql/Sql.mjs";
 
 type UserTable = {
 	columns: {
@@ -109,7 +109,7 @@ describe("SqliteStorage.findMany", () => {
 	});
 
 	it("should render tuple of constants and parameters", () => {
-		const expr: Sql = {
+		const expr: Source = {
 			kind: "select",
 			table: "users",
 			columns: "*",

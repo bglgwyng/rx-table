@@ -1,4 +1,4 @@
-import type { SqlExpression } from "./SqlExpression.mjs";
+import type { SqlExpression } from "../sql/SqlExpression.mjs";
 import type { TableBase, PrimaryKeyRecord, Row, ColumnName } from "./Table.mjs";
 
 export type PageDelta<T extends TableBase> = (

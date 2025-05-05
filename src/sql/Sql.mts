@@ -1,5 +1,5 @@
-import type { TableBase, Row } from "./Table.mts";
-import type { Parameterizable, SqlExpression } from "./SqlExpression.mts";
+import type { TableBase, Row } from "../types/Table.mjs";
+import type { Parameterizable, SqlExpression } from "./SqlExpression.mjs";
 
 export type SqlOrderBy = {
 	column: string;
@@ -23,7 +23,7 @@ export type Insert<Table extends TableBase = TableBase> = {
 	};
 };
 
-export type Sql<Table extends TableBase = TableBase> =
+export type Source<Table extends TableBase = TableBase> =
 	| Select<Table>
 	| Insert<Table>;
 

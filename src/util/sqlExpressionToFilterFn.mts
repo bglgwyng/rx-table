@@ -1,4 +1,4 @@
-import type { SqlExpression } from "../types/SqlExpression.mjs";
+import type { SqlExpression } from "../sql/SqlExpression.mjs";
 import type { Row } from "../types/Table.mjs";
 import type { TableBase } from "../types/Table.mjs";
 

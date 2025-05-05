@@ -11,14 +11,14 @@ import {
 } from "../../types/Page.mjs";
 import type { PrimaryKey, PrimaryKeyRecord, Row } from "../../types/Table.mjs";
 import type { TableBase } from "../../types/Table.mjs";
-import { compileSql } from "./renderExpression.mjs";
+import { compileSql } from "../../sql/compileSql.mjs";
 import assert from "assert";
-import type { Sql } from "../../types/Sql.mjs";
+import type { Source } from "../../sql/Sql.mjs";
 import {
 	ands,
 	type Parameterizable,
 	type SqlExpression,
-} from "../../types/SqlExpression.mjs";
+} from "../../sql/SqlExpression.mjs";
 
 export class BetterSqlite3Storage<Table extends TableBase>
 	implements WritableStorage<Table>, ReadableStorage<Table>
@@ -145,7 +145,7 @@ export class BetterSqlite3Storage<Table extends TableBase>
 	compileFindMany(pageInput: PageInput<Table>): CompiledQuery<PageParameter> {
 		const selectCols = "*";
 
-		const ast: Sql = {
+		const ast: Source = {
 			kind: "select",
 			table: this.tableName,
 			columns: selectCols,
@@ -206,7 +206,7 @@ export class BetterSqlite3Storage<Table extends TableBase>
 			: undefined;
 		assert(cursorWhere !== undefined, "cursorWhere is undefined");
 
-		const ast: Sql = {
+		const ast: Source = {
 			kind: "select",
 			table: this.tableName,
 			columns: selectCols,
@@ -277,7 +277,6 @@ export class BetterSqlite3Storage<Table extends TableBase>
 				) as Row<Table>[];
 			}
 		}
-		console.info({ rows, limit });
 
 		// For rowCount, count all rows matching the filter (ignoring limit)
 		// const whereClause = stmt.sql.match(/WHERE .+?(?= ORDER BY|$)/)?.[0] ?? "";

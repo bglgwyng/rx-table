@@ -1,4 +1,4 @@
-import type { TableBase } from "./Table.mjs";
+import type { TableBase } from "../types/Table.mjs";
 
 export type ColumnExpression<T extends TableBase> = {
 	kind: "column";

@@ -1,13 +1,13 @@
 import assert from "assert";
-import type { TableBase, Row } from "../../types/Table.mts";
+import type { TableBase, Row } from "../types/Table.mjs";
 import {
 	isParameterizable,
 	type Parameterizable,
 	type SqlExpression,
-} from "../../types/SqlExpression.mjs";
-import type { Sql } from "../../types/Sql.mts";
+} from "./SqlExpression.mjs";
+import type { Source } from "./Sql.mjs";
 
-export function* renderSqlExpression(
+function* renderSqlExpression(
 	expr: SqlExpression<TableBase>,
 ): Generator<Parameterizable, string> {
 	if (expr.kind === "binOp") {
@@ -42,8 +42,8 @@ export function* renderSqlExpression(
 	assert.fail("Unsupported expression type in renderExpression");
 }
 
-export function* renderSql(
-	sqlAst: Sql<TableBase>,
+function* renderSql(
+	sqlAst: Source<TableBase>,
 ): Generator<Parameterizable, string> {
 	switch (sqlAst.kind) {
 		case "select": {
@@ -104,7 +104,7 @@ export function compileSqlExpression<Table extends TableBase = TableBase>(
 }
 
 export function compileSql<Table extends TableBase = TableBase>(
-	sqlAst: Sql<Table>,
+	sqlAst: Source<Table>,
 ): [sql: string, (context: unknown) => unknown[]] {
 	const gen = renderSql(sqlAst);
 	const params: Parameterizable[] = [];

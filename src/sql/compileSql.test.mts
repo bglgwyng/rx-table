@@ -1,14 +1,7 @@
 import { describe, it, expect } from "vitest";
-import {
-	compileSql,
-	compileSqlExpression,
-	renderSqlExpression,
-} from "./renderExpression.mjs";
-import type {
-	SqlExpression,
-	TupleExpression,
-} from "../../types/SqlExpression.mjs";
-import type { Sql } from "../../types/Sql.mjs";
+import { compileSql, compileSqlExpression } from "./compileSql.mjs";
+import type { SqlExpression, TupleExpression } from "./SqlExpression.mjs";
+import type { Source } from "./Sql.mjs";
 
 type Table = {
 	columns: {
@@ -16,7 +9,7 @@ type Table = {
 	};
 	primaryKey: ["foo"];
 };
-describe("renderSqlExpression", () => {
+describe("compileSql", () => {
 	it("renders simple column expression with compileSqlExpression", () => {
 		const expr: SqlExpression<Table> = { kind: "column", name: "foo" };
 
@@ -36,7 +29,7 @@ describe("renderSqlExpression", () => {
 	});
 
 	it("renders tuple expression with compileSql", () => {
-		const expr: Sql = {
+		const expr: Source = {
 			kind: "select",
 			table: "dummy",
 			columns: "*",
@@ -56,7 +49,7 @@ describe("renderSqlExpression", () => {
 	});
 
 	it("renders binary operation expression with compileSql", () => {
-		const expr: Sql = {
+		const expr: Source = {
 			kind: "select",
 			table: "dummy",
 			columns: "*",
@@ -87,7 +80,7 @@ describe("renderSqlExpression", () => {
 	});
 
 	it("renders insert statement with compileSql", () => {
-		const expr: Sql = {
+		const expr: Source = {
 			kind: "insert",
 			table: "dummy",
 			values: {
