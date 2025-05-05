@@ -32,6 +32,7 @@ import {
 	mkSelect,
 	mkUpdate,
 } from "../../sql/mks.mjs";
+import assert from "assert";
 
 export class BetterSqlite3Storage<Table extends TableSchemaBase>
 	implements WritableStorage<Table>, ReadableStorage<Table>
@@ -226,7 +227,9 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 			) as PrimaryKeyRecord<Table>;
 
 		return {
-			rows: rows.map(getCursor),
+			rows: (pageInput.kind === "forward" ? rows : rows.reverse()).map(
+				getCursor,
+			),
 			rowCount,
 			// biome-ignore lint/style/noNonNullAssertion: <explanation>
 			startCursor: rows.length > 0 ? getCursor(rows[0]!) : undefined,
@@ -282,6 +285,18 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 		pageInput: PageInput<Table>,
 		hasCursor: HasCursor,
 	): CompiledQuery<PageParameter<Table, HasCursor>> {
+		assert(
+			pageInput.orderBy.every((o) => o.direction === "asc") ||
+				pageInput.orderBy.every((o) => o.direction === "desc"),
+			"orderBy must be all ascending or all descending",
+		);
+		assert(pageInput.orderBy.length > 0, "orderBy must not be empty");
+		assert(
+			this.schema.primaryKey.every((pk) =>
+				pageInput.orderBy.some((o) => o.column === pk),
+			),
+			"orderBy must include all primary key columns",
+		);
 		const selectCols = "*";
 
 		const pkColumns = mkPkColumns(this.schema);
@@ -298,19 +313,13 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 			where: ands(
 				[pageInput.filter, cursorWhere].filter((x) => x !== undefined),
 			),
-			orderBy:
-				pageInput.orderBy && pageInput.orderBy.length > 0
-					? pageInput.orderBy.map((o) => ({
-							column: o.column,
-							direction:
-								pageInput.kind === "forward"
-									? o.direction
-									: invertDirection(o.direction),
-						}))
-					: this.primaryKeys.map((pk) => ({
-							column: pk,
-							direction: pageInput.kind === "forward" ? "asc" : "desc",
-						})),
+			orderBy: pageInput.orderBy.map((o) => ({
+				column: o.column,
+				direction:
+					pageInput.kind === "forward"
+						? o.direction
+						: invertDirection(o.direction),
+			})),
 			limit: mkParameter(
 				(context: PageParameter<Table, HasCursor>) => context.limit,
 			),

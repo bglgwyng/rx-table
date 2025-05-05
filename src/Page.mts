@@ -42,7 +42,7 @@ export type PageInput<T extends TableSchemaBase> = (
 	| ForwardPageInput<T>
 	| BackwardPageInput<T>
 ) & {
-	orderBy?: {
+	orderBy: {
 		column: ColumnName<T>;
 		direction: "asc" | "desc";
 	}[];

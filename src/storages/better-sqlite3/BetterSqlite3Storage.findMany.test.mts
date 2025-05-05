@@ -22,6 +22,55 @@ const userSchema = {
 type UserTable = typeof userSchema;
 
 describe("SqliteStorage.findMany", () => {
+	it("returns results in orderBy direction for before+last (backward) pagination (Relay spec)", () => {
+		const db = new Database(":memory:");
+		db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)");
+		const storage = new BetterSqlite3Storage<UserTable>(userSchema, db);
+		for (let i = 1; i <= 10; ++i) {
+			storage.insert({ id: i, name: `User${i}`, age: 20 + i });
+		}
+		// forward pagination
+		const forwardInput: PageInput<UserTable> = {
+			kind: "forward",
+			after: { id: 3 },
+			first: 3,
+			orderBy: [{ column: "id", direction: "asc" }],
+		};
+		const forwardPage = storage.findMany(forwardInput);
+		const forwardIds = Array.from(forwardPage.rows).map((pk) => pk.id);
+		// backward pagination
+		const backwardInput: PageInput<UserTable> = {
+			kind: "backward",
+			before: { id: 7 },
+			last: 3,
+			orderBy: [{ column: "id", direction: "asc" }],
+		};
+		const backwardPage = storage.findMany(backwardInput);
+		const backwardIds = Array.from(backwardPage.rows).map((pk) => pk.id);
+		// forward: [4,5,6], backward: [4,5,6]
+		expect(backwardIds).toEqual([4, 5, 6]);
+	});
+
+	it("throws if orderBy directions are mixed (asc/desc)", () => {
+		const db = new Database(":memory:");
+		db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)");
+		const storage = new BetterSqlite3Storage<UserTable>(userSchema, db);
+		for (let i = 1; i <= 3; ++i) {
+			storage.insert({ id: i, name: `User${i}`, age: 20 + i });
+		}
+		const pageInput: PageInput<UserTable> = {
+			kind: "forward",
+			first: 2,
+			orderBy: [
+				{ column: "id", direction: "asc" },
+				{ column: "name", direction: "desc" },
+			],
+		};
+		expect(() => storage.findMany(pageInput)).toThrow(
+			/orderBy must be all ascending or all descending/
+		);
+	});
+
 	let db: Database.Database;
 	let storage: BetterSqlite3Storage<UserTable>;
 
@@ -61,10 +110,10 @@ describe("SqliteStorage.findMany", () => {
 		};
 		const page = storage.findMany(pageInput);
 		const ids = Array.from(page.rows).map((pk) => pk.id);
-		expect(ids).toEqual([7, 6, 5]);
+		expect(ids).toEqual([5, 6, 7]);
 		// expect(page.rowCount).toBe(7); // 7 rows before id=8
-		expect(page.startCursor).toEqual({ id: 7 });
-		expect(page.endCursor).toEqual({ id: 5 });
+		expect(page.startCursor).toEqual({ id: 5 });
+		expect(page.endCursor).toEqual({ id: 7 });
 	});
 
 	it("supports filtering and all results satisfy conditionToFilter", () => {
