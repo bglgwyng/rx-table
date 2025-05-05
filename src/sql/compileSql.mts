@@ -80,6 +80,16 @@ export function* renderSql(
 			}
 			sql += placeholders.join(", ");
 			sql += ")";
+
+			if (sqlAst.onConflict) {
+				sql += ` ON CONFLICT (${sqlAst.onConflict.columns.join(", ")}) DO UPDATE SET `;
+				const setKeys = Object.keys(sqlAst.onConflict.do.set);
+				sql += setKeys.map(k => `${k} = ?`).join(", ");
+				for (const k of setKeys) {
+					yield sqlAst.onConflict.do.set[k as keyof Row<TableSchemaBase>]!;
+				}
+			}
+
 			return sql;
 		}
 		case "update": {

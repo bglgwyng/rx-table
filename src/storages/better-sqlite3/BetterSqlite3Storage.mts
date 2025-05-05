@@ -16,7 +16,7 @@ import type {
 } from "../../types/TableSchema.mjs";
 import type { TableSchemaBase } from "../../types/TableSchema.mjs";
 import { compileSql } from "../../sql/compileSql.mjs";
-import type { Source } from "../../sql/Sql.mjs";
+import type { Insert, Source } from "../../sql/Sql.mjs";
 import {
 	ands,
 	type ParameterExpression,
@@ -77,26 +77,43 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 	/**
 	 * Insert a row or update it if it already exists (based on primary key)
 	 */
-	upsert(
-		row: Row<Table>,
-		update?: Partial<Omit<Row<Table>, PrimaryKey<Table>[number]>>,
-	): void {
-		const columns = Object.keys(row);
-		const placeholders = columns.map(() => "?").join(", ");
-		const updateSet = columns
-			.filter((col) => !this.primaryKeys.includes(col))
-			.map((col) => `${col} = excluded.${col}`)
-			.join(", ");
-		const values = columns.map((col) => row[col]);
-
-		const stmt = this.database.prepare(`
-      INSERT INTO ${this.tableName} (${columns.join(", ")})
-      VALUES (${placeholders})
-      ON CONFLICT (${this.primaryKeys.join(", ")}) DO UPDATE SET
-      ${updateSet}
-    `);
-
-		stmt.run(...values);
+	upsert(row: Row<Table>): void {
+		const columns = Object.keys(row) as (keyof Row<Table>)[];
+		const values = Object.fromEntries(
+			columns.map((col) => [
+				col,
+				{
+					kind: "parameter" as const,
+					getValue: (row: Row<Table>) => row[col],
+				} as ParameterExpression,
+			]),
+		) as Record<keyof Row<Table>, ParameterExpression>;
+		const set = Object.fromEntries(
+			columns
+				.filter((col) => !this.primaryKeys.includes(col as string))
+				.map((col) => [
+					col,
+					{
+						kind: "parameter" as const,
+						getValue: (row: Row<Table>) => row[col],
+					} as ParameterExpression,
+				]),
+		) as Record<string, ParameterExpression>;
+		const insertAst: Insert<Table> = {
+			kind: "insert" as const,
+			table: this.tableName,
+			values,
+			onConflict: {
+				columns: this.primaryKeys.map((pk) => pk.toString()),
+				do: {
+					kind: "update" as const,
+					set,
+				},
+			},
+		};
+		const [sql, getParams] = compileSql(insertAst);
+		const stmt = this.database.prepare(sql);
+		stmt.run(...getParams(row));
 	}
 
 	/**

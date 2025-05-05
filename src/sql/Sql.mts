@@ -21,6 +21,13 @@ export type Insert<Table extends TableSchemaBase = TableSchemaBase> = {
 	values: {
 		[key in keyof Row<Table>]: Parameterizable;
 	};
+	onConflict?: {
+		columns: (keyof Row<Table>)[];
+		do: {
+			kind: "update";
+			set: { [K in keyof Row<Table>]?: Parameterizable };
+		};
+	};
 };
 
 export type Update<Table extends TableSchemaBase = TableSchemaBase> = {
