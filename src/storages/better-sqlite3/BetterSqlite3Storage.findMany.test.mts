@@ -130,4 +130,31 @@ describe("SqliteStorage.findMany", () => {
 		expect(params[1]).toBe("hello");
 		expect(params[2]).toBe(42);
 	});
+
+	it("fetches all users sequentially using cursor pagination", () => {
+		const pageSize = 3;
+		let after: { id: number } | undefined = undefined;
+		const allFetchedIds: number[] = [];
+		while (true) {
+			const pageInput = {
+				kind: "leftClosed" as const,
+				first: pageSize,
+				orderBy: [
+					{
+						column: "id" as keyof UserTable["columns"],
+						direction: "asc" as const,
+					},
+				],
+				...(after ? { after } : {}),
+			};
+			const page = storage.findMany(pageInput);
+			const ids = Array.from(page.rows).map((pk) => pk.id);
+			if (ids.length === 0) break;
+			allFetchedIds.push(...ids);
+			if (ids.length < pageSize) break;
+			const lastId = ids[ids.length - 1];
+			after = lastId !== undefined ? { id: lastId } : undefined;
+		}
+		expect(allFetchedIds).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+	});
 });
