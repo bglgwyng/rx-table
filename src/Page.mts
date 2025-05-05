@@ -5,7 +5,6 @@ import type {
 	Row,
 	ColumnName,
 } from "./types/TableSchema.mjs";
-} from "./TableSchema.mjs";
 
 export type PageDelta<T extends TableSchemaBase> = (
 	| {
@@ -26,22 +25,22 @@ export type Page<T extends TableSchemaBase> = {
 };
 // Left-closed: only after is set
 
-export type PageInputLeftClosed<T extends TableSchemaBase> = {
-	kind: "leftClosed";
+export type ForwardPageInput<T extends TableSchemaBase> = {
+	kind: "forward";
 	after?: PrimaryKeyRecord<T>;
 	first: number;
 };
 // Right-closed: only before is set
 
-export type PageInputRightClosed<T extends TableSchemaBase> = {
-	kind: "rightClosed";
+export type BackwardPageInput<T extends TableSchemaBase> = {
+	kind: "backward";
 	before?: PrimaryKeyRecord<T>;
 	last: number;
 };
 
 export type PageInput<T extends TableSchemaBase> = (
-	| PageInputLeftClosed<T>
-	| PageInputRightClosed<T>
+	| ForwardPageInput<T>
+	| BackwardPageInput<T>
 ) & {
 	orderBy?: {
 		column: ColumnName<T>;

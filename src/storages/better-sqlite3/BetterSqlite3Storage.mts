@@ -181,7 +181,7 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 		);
 
 		const cursorWhere: SqlExpression<Table> | undefined = hasCursor
-			? (pageInput.kind === "leftClosed" ? mkGT : mkLT)(pkColumns, pkParams)
+			? (pageInput.kind === "forward" ? mkGT : mkLT)(pkColumns, pkParams)
 			: undefined;
 
 		const ast: Select<Table> = mkSelect(this.schema, selectCols, {
@@ -193,13 +193,13 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 					? pageInput.orderBy.map((o) => ({
 							column: o.column,
 							direction:
-								pageInput.kind === "leftClosed"
+								pageInput.kind === "forward"
 									? o.direction
 									: invertDirection(o.direction),
 						}))
 					: this.primaryKeys.map((pk) => ({
 							column: pk,
-							direction: pageInput.kind === "leftClosed" ? "asc" : "desc",
+							direction: pageInput.kind === "forward" ? "asc" : "desc",
 						})),
 			limit: mkParameter(
 				(context: PageParameter<Table, HasCursor>) => context.limit,
@@ -225,7 +225,7 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 		let rows: Row<Table>[] = [];
 		let limit = 0;
 
-		if (pageInput.kind === "rightClosed") {
+		if (pageInput.kind === "backward") {
 			// Right-closed: fetch all rows before the cursor, take last N
 
 			if (pageInput.before === undefined) {

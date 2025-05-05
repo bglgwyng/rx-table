@@ -39,7 +39,7 @@ describe("SqliteStorage.findMany", () => {
 
 	it("left-closed: paginates forward with after+first", () => {
 		const pageInput: PageInput<UserTable> = {
-			kind: "leftClosed",
+			kind: "forward",
 			after: { id: 3 },
 			first: 4,
 			orderBy: [{ column: "id", direction: "asc" }],
@@ -54,7 +54,7 @@ describe("SqliteStorage.findMany", () => {
 
 	it("right-closed: paginates backward with before+last", () => {
 		const pageInput: PageInput<UserTable> = {
-			kind: "rightClosed",
+			kind: "backward",
 			before: { id: 8 },
 			last: 3,
 			orderBy: [{ column: "id", direction: "asc" }],
@@ -75,7 +75,7 @@ describe("SqliteStorage.findMany", () => {
 			right: { kind: "constant", value: 25 },
 		};
 		const pageInput: PageInput<UserTable> = {
-			kind: "leftClosed",
+			kind: "forward",
 			first: 2,
 			orderBy: [{ column: "id", direction: "asc" }],
 			filter: filterExpr,
@@ -97,7 +97,7 @@ describe("SqliteStorage.findMany", () => {
 
 	it("supports orderBy descending", () => {
 		const pageInput: PageInput<UserTable> = {
-			kind: "leftClosed",
+			kind: "forward",
 			first: 3,
 			orderBy: [{ column: "id", direction: "desc" }],
 		};
@@ -138,7 +138,7 @@ describe("SqliteStorage.findMany", () => {
 		const allFetchedIds: number[] = [];
 		while (true) {
 			const pageInput = {
-				kind: "leftClosed" as const,
+				kind: "forward" as const,
 				first: pageSize,
 				orderBy: [
 					{
@@ -198,7 +198,7 @@ describe("SqliteStorage.findMany with composite key", () => {
 		const allFetched: Array<{ id: number; sub_id: number }> = [];
 		while (true) {
 			const pageInput = {
-				kind: "leftClosed" as const,
+				kind: "forward" as const,
 				first: pageSize,
 				orderBy: [
 					{
