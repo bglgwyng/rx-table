@@ -158,3 +158,62 @@ describe("SqliteStorage.findMany", () => {
 		expect(allFetchedIds).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 	});
 });
+
+type CompositeTable = {
+  columns: {
+    id: number;
+    sub_id: number;
+    name: string;
+  };
+  primaryKey: ["id", "sub_id"];
+};
+
+describe("SqliteStorage.findMany with composite key", () => {
+  let db: Database.Database;
+  let storage: BetterSqlite3Storage<CompositeTable>;
+
+  beforeEach(() => {
+    db = new Database(":memory:");
+    db.exec(
+      "CREATE TABLE composite (id INTEGER, sub_id INTEGER, name TEXT, PRIMARY KEY (id, sub_id))"
+    );
+    storage = new BetterSqlite3Storage<CompositeTable>(db, "composite", ["id", "sub_id"]);
+    // Insert sample data: id 1~3, sub_id 1~2
+    for (let id = 1; id <= 3; ++id) {
+      for (let sub_id = 1; sub_id <= 2; ++sub_id) {
+        storage.insert({ id, sub_id, name: `User${id}_${sub_id}` });
+      }
+    }
+  });
+
+  it("fetches all rows sequentially using composite cursor", () => {
+    const pageSize = 2;
+    let after: { id: number; sub_id: number } | undefined = undefined;
+    const allFetched: Array<{ id: number; sub_id: number }> = [];
+    while (true) {
+      const pageInput = {
+        kind: "leftClosed" as const,
+        first: pageSize,
+        orderBy: [
+          { column: "id" as keyof CompositeTable["columns"], direction: "asc" as const },
+          { column: "sub_id" as keyof CompositeTable["columns"], direction: "asc" as const },
+        ],
+        ...(after ? { after } : {}),
+      };
+      const page = storage.findMany(pageInput);
+      const keys = Array.from(page.rows);
+      // Debug: log actual rows returned
+      // eslint-disable-next-line no-console
+      console.log('DEBUG composite page.rows:', page.rows);
+      if (keys.length === 0) break;
+      allFetched.push(...keys);
+      if (keys.length < pageSize) break;
+      after = keys[keys.length - 1];
+    }
+    expect(allFetched).toEqual([
+      { id: 1, sub_id: 1 }, { id: 1, sub_id: 2 },
+      { id: 2, sub_id: 1 }, { id: 2, sub_id: 2 },
+      { id: 3, sub_id: 1 }, { id: 3, sub_id: 2 },
+    ]);
+  });
+});

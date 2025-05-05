@@ -259,9 +259,9 @@ export class BetterSqlite3Storage<Table extends TableBase>
 			rows: rows.map(getCursor),
 			rowCount,
 			// biome-ignore lint/style/noNonNullAssertion: <explanation>
-			startCursor: getCursor(rows[0]!),
+			startCursor: rows.length > 0 ? getCursor(rows[0]!) : undefined,
 			// biome-ignore lint/style/noNonNullAssertion: <explanation>
-			endCursor: getCursor(rows.at(-1)!),
+			endCursor: rows.length > 0 ? getCursor(rows.at(-1)!) : undefined,
 		};
 	}
 }
