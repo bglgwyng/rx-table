@@ -139,38 +139,10 @@ export class BetterSqlite3Storage<Table extends TableBase>
 		return row === undefined ? null : (row as Row<Table>);
 	}
 
-	/**
-	 * Build SQL and params for findMany (for debugging/testing)
-	 */
-	compileFindMany(pageInput: PageInput<Table>): CompiledQuery<PageParameter> {
-		const selectCols = "*";
-
-		const ast: Source = {
-			kind: "select",
-			table: this.tableName,
-			columns: selectCols,
-			where: pageInput.filter,
-			orderBy:
-				pageInput.orderBy && pageInput.orderBy.length > 0
-					? pageInput.orderBy
-					: this.primaryKeys.map((pk) => ({
-							column: pk,
-							direction: pageInput.kind === "leftClosed" ? "asc" : "desc",
-						})),
-			limit: {
-				kind: "parameter",
-				getValue: (context: PageParameter) => context.limit,
-			},
-		};
-
-		const [queryString, getParams] = compileSql(ast);
-		return [this.database.prepare(queryString), getParams];
-	}
-
-	compileFindManyWithCursor(
+	private compileFindMany<HasCursor extends boolean>(
 		pageInput: PageInput<Table>,
-		hasCursor: boolean,
-	): CompiledQuery<PageParameterWithCursor> {
+		hasCursor: HasCursor,
+	): CompiledQuery<PageParameter<HasCursor>> {
 		const selectCols = "*";
 
 		const cursorWhere: SqlExpression<Table> | undefined = hasCursor
@@ -183,8 +155,8 @@ export class BetterSqlite3Storage<Table extends TableBase>
 								left: { kind: "column", name: pk },
 								right: {
 									kind: "parameter",
-									getValue: (context: PageParameterWithCursor) =>
-										context.cursor[pk],
+									getValue: (context: PageParameter<true>) =>
+										context.cursor ? context.cursor[pk] : undefined,
 								},
 							}),
 						),
@@ -197,14 +169,13 @@ export class BetterSqlite3Storage<Table extends TableBase>
 								left: { kind: "column", name: pk },
 								right: {
 									kind: "parameter",
-									getValue: (context: PageParameterWithCursor) =>
+									getValue: (context: PageParameter<true>) =>
 										context.cursor[pk],
 								},
 							}),
 						),
 					)
 			: undefined;
-		assert(cursorWhere !== undefined, "cursorWhere is undefined");
 
 		const ast: Source = {
 			kind: "select",
@@ -228,7 +199,7 @@ export class BetterSqlite3Storage<Table extends TableBase>
 						})),
 			limit: {
 				kind: "parameter",
-				getValue: (context: PageParameterWithCursor) => context.limit,
+				getValue: (context: PageParameter<HasCursor>) => context.limit,
 			},
 		};
 
@@ -238,9 +209,11 @@ export class BetterSqlite3Storage<Table extends TableBase>
 
 	findMany(pageInput: PageInput<Table>): Page<Table> {
 		// Build SELECT clause
-		const [stmt, getParams] = this.compileFindMany(pageInput);
-		const [stmtWithCursor, getParamsWithCursor] =
-			this.compileFindManyWithCursor(pageInput, true);
+		const [stmt, getParams] = this.compileFindMany(pageInput, false);
+		const [stmtWithCursor, getParamsWithCursor] = this.compileFindMany(
+			pageInput,
+			true,
+		);
 
 		let rows: Row<Table>[] = [];
 		let limit = 0;
@@ -306,11 +279,8 @@ export type CompiledQuery<Context extends Record<string, unknown>> = readonly [
 	params: (context?: Context) => unknown[],
 ];
 
-type PageParameterWithCursor = {
-	cursor: Record<string, unknown>;
+type PageParameter<HasCursor extends boolean> = {
 	limit: number;
-};
-
-type PageParameter = {
-	limit: number;
-};
+} & (HasCursor extends true
+	? { cursor: Record<string, unknown> }
+	: Record<string, unknown>);
