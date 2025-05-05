@@ -14,7 +14,7 @@ import {
 } from "rxjs";
 import type { Storage } from "./Storage.mjs";
 import { type Dynamic, createDynamic } from "./core/Dynamic.mjs";
-import type { Page, PageDelta, PageInput } from "./types/Page.mjs";
+import type { Page, PageDelta, PageInput } from "./Page.mjs";
 import type {
 	ReadableTable,
 	TableEvent,

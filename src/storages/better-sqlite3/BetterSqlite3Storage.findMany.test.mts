@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import Database from "better-sqlite3";
 import { BetterSqlite3Storage } from "./BetterSqlite3Storage.mjs";
 import { sqlExpressionToFilterFn } from "../../util/sqlExpressionToFilterFn.mjs";
-import type { PageInput } from "../../types/Page.mjs";
+import type { PageInput } from "../../Page.mjs";
 import type { Row } from "../../types/TableSchema.mjs";
 import type { SqlExpression } from "../../sql/SqlExpression.mjs";
 import type { TableSchemaBase } from "../../types/TableSchema.mjs";

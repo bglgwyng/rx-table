@@ -1,9 +1,10 @@
-import type { SqlExpression } from "../sql/SqlExpression.mjs";
+import type { SqlExpression } from "./sql/SqlExpression.mjs";
 import type {
 	TableSchemaBase,
 	PrimaryKeyRecord,
 	Row,
 	ColumnName,
+} from "./types/TableSchema.mjs";
 } from "./TableSchema.mjs";
 
 export type PageDelta<T extends TableSchemaBase> = (
@@ -49,7 +50,7 @@ export type PageInput<T extends TableSchemaBase> = (
 	filter?: SqlExpression<T, unknown>;
 };
 
-export type PageInputDelta<T extends TableSchemaBase> =
+export type PageInputDelta =
 	| { kind: "loadPrev"; count?: number }
 	| { kind: "loadNext"; count?: number };
 

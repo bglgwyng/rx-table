@@ -1,4 +1,4 @@
-import type { Page, PageInput } from "./types/Page.mjs";
+import type { Page, PageInput } from "./Page.mjs";
 import type {
 	PrimaryKey,
 	PrimaryKeyRecord,

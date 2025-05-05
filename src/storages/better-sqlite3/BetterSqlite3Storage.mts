@@ -4,11 +4,7 @@ import type {
 	ReadableStorage,
 	WritableStorage,
 } from "../../Storage.mjs";
-import {
-	invertDirection,
-	type Page,
-	type PageInput,
-} from "../../types/Page.mjs";
+import { invertDirection, type Page, type PageInput } from "../../Page.mjs";
 import type {
 	PrimaryKey,
 	PrimaryKeyRecord,

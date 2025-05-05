@@ -1,5 +1,5 @@
 import type { Dynamic } from "../core/Dynamic.mjs";
-import type { PageInput, Page, PageDelta } from "./Page.mjs";
+import type { PageInput, Page, PageDelta } from "../Page.mjs";
 
 export interface TableSchemaBase {
 	name: string;
