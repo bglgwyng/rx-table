@@ -168,51 +168,6 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 		return row === undefined ? null : (row as Row<Table>);
 	}
 
-	private compileFindMany<HasCursor extends boolean>(
-		pageInput: PageInput<Table>,
-		hasCursor: HasCursor,
-	): CompiledQuery<PageParameter<Table, HasCursor>> {
-		const selectCols = "*";
-
-		const pkColumns = mkPkColumns(this.schema);
-		const pkParams = mkPkParams(
-			this.schema,
-			(context: PageParameter<Table, true>) => context.cursor,
-		);
-
-		const cursorWhere: SqlExpression<Table> | undefined = hasCursor
-			? (pageInput.kind === "forward" ? mkGT : mkLT)(pkColumns, pkParams)
-			: undefined;
-
-		const ast: Select<Table> = mkSelect(this.schema, selectCols, {
-			where: ands(
-				[pageInput.filter, cursorWhere].filter((x) => x !== undefined),
-			),
-			orderBy:
-				pageInput.orderBy && pageInput.orderBy.length > 0
-					? pageInput.orderBy.map((o) => ({
-							column: o.column,
-							direction:
-								pageInput.kind === "forward"
-									? o.direction
-									: invertDirection(o.direction),
-						}))
-					: this.primaryKeys.map((pk) => ({
-							column: pk,
-							direction: pageInput.kind === "forward" ? "asc" : "desc",
-						})),
-			limit: mkParameter(
-				(context: PageParameter<Table, HasCursor>) => context.limit,
-			),
-		});
-
-		const [queryString, getParams] = compileSql(ast);
-		return {
-			statement: this.database.prepare(queryString),
-			getParams,
-		};
-	}
-
 	findMany(pageInput: PageInput<Table>): Page<Table> {
 		// Build SELECT clause
 		const { statement: stmt, getParams } = this.compileFindMany(
@@ -272,7 +227,7 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 
 		return {
 			rows: rows.map(getCursor),
-			// rowCount,
+			rowCount,
 			// biome-ignore lint/style/noNonNullAssertion: <explanation>
 			startCursor: rows.length > 0 ? getCursor(rows[0]!) : undefined,
 			// biome-ignore lint/style/noNonNullAssertion: <explanation>
@@ -321,6 +276,51 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 			};
 		}
 		return this._compiledDelete;
+	}
+
+	private compileFindMany<HasCursor extends boolean>(
+		pageInput: PageInput<Table>,
+		hasCursor: HasCursor,
+	): CompiledQuery<PageParameter<Table, HasCursor>> {
+		const selectCols = "*";
+
+		const pkColumns = mkPkColumns(this.schema);
+		const pkParams = mkPkParams(
+			this.schema,
+			(context: PageParameter<Table, true>) => context.cursor,
+		);
+
+		const cursorWhere: SqlExpression<Table> | undefined = hasCursor
+			? (pageInput.kind === "forward" ? mkGT : mkLT)(pkColumns, pkParams)
+			: undefined;
+
+		const ast: Select<Table> = mkSelect(this.schema, selectCols, {
+			where: ands(
+				[pageInput.filter, cursorWhere].filter((x) => x !== undefined),
+			),
+			orderBy:
+				pageInput.orderBy && pageInput.orderBy.length > 0
+					? pageInput.orderBy.map((o) => ({
+							column: o.column,
+							direction:
+								pageInput.kind === "forward"
+									? o.direction
+									: invertDirection(o.direction),
+						}))
+					: this.primaryKeys.map((pk) => ({
+							column: pk,
+							direction: pageInput.kind === "forward" ? "asc" : "desc",
+						})),
+			limit: mkParameter(
+				(context: PageParameter<Table, HasCursor>) => context.limit,
+			),
+		});
+
+		const [queryString, getParams] = compileSql(ast);
+		return {
+			statement: this.database.prepare(queryString),
+			getParams,
+		};
 	}
 }
 
