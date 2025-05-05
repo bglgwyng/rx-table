@@ -92,4 +92,66 @@ describe("compileSql", () => {
 		const params = getParams({ foo: "bar" });
 		expect(params).toEqual(["bar"]);
 	});
+
+	it("renders update statement with compileSql", () => {
+		const expr: Source = {
+			kind: "update",
+			table: "dummy",
+			set: {
+				foo: { kind: "parameter", getValue: (ctx: { foo: string }) => ctx.foo },
+			},
+			where: {
+				kind: "binOp",
+				operator: "=",
+				left: { kind: "column", name: "foo" },
+				right: { kind: "constant", value: "bar" },
+			},
+		};
+		const [sql, getParams] = compileSql(expr);
+		expect(sql).toBe("UPDATE dummy SET foo = ? WHERE (foo = ?)");
+		const params = getParams({ foo: "baz" });
+		expect(params).toEqual(["baz", "bar"]);
+	});
+
+	it("renders update statement without where", () => {
+		const expr: Source = {
+			kind: "update",
+			table: "dummy",
+			set: {
+				foo: { kind: "constant", value: "baz" },
+			},
+		};
+		const [sql, getParams] = compileSql(expr);
+		expect(sql).toBe("UPDATE dummy SET foo = ?");
+		const params = getParams({});
+		expect(params).toEqual(["baz"]);
+	});
+
+	it("renders delete statement with where", () => {
+		const expr: Source = {
+			kind: "delete",
+			table: "dummy",
+			where: {
+				kind: "binOp",
+				operator: "=",
+				left: { kind: "column", name: "foo" },
+				right: { kind: "constant", value: "bar" },
+			},
+		};
+		const [sql, getParams] = compileSql(expr);
+		expect(sql).toBe("DELETE FROM dummy WHERE (foo = ?)");
+		const params = getParams({});
+		expect(params).toEqual(["bar"]);
+	});
+
+	it("renders delete statement without where", () => {
+		const expr: Source = {
+			kind: "delete",
+			table: "dummy",
+		};
+		const [sql, getParams] = compileSql(expr);
+		expect(sql).toBe("DELETE FROM dummy");
+		const params = getParams({});
+		expect(params).toEqual([]);
+	});
 });

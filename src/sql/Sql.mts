@@ -23,8 +23,25 @@ export type Insert<Table extends TableBase = TableBase> = {
 	};
 };
 
+export type Update<Table extends TableBase = TableBase> = {
+	kind: "update";
+	table: string;
+	set: {
+		[key in keyof Row<Table>]: Parameterizable;
+	};
+	where?: SqlExpression<Table>;
+};
+
+export type Delete<Table extends TableBase = TableBase> = {
+	kind: "delete";
+	table: string;
+	where?: SqlExpression<Table>;
+};
+
 export type Source<Table extends TableBase = TableBase> =
 	| Select<Table>
-	| Insert<Table>;
+	| Insert<Table>
+	| Update<Table>
+	| Delete<Table>;
 
-// 추후 update/delete 등 추가 가능
+// update/delete 등도 추가됨

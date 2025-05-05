@@ -80,6 +80,32 @@ function* renderSql(
 			sql += ")";
 			return sql;
 		}
+		case "update": {
+			const keys = Object.keys(sqlAst.set) as (keyof Row<TableBase>)[];
+			let sql = `UPDATE ${sqlAst.table} SET `;
+			const setClauses: string[] = [];
+			for (const k of keys) {
+				setClauses.push(`${k} = ?`);
+			}
+			sql += setClauses.join(", ");
+			for (const k of keys) {
+				// biome-ignore lint/style/noNonNullAssertion: <explanation>
+				yield sqlAst.set[k as keyof Row<TableBase>]!;
+			}
+			if (sqlAst.where) {
+				const whereSql = yield* renderSqlExpression(sqlAst.where);
+				sql += ` WHERE ${whereSql}`;
+			}
+			return sql;
+		}
+		case "delete": {
+			let sql = `DELETE FROM ${sqlAst.table}`;
+			if (sqlAst.where) {
+				const whereSql = yield* renderSqlExpression(sqlAst.where);
+				sql += ` WHERE ${whereSql}`;
+			}
+			return sql;
+		}
 	}
 }
 
