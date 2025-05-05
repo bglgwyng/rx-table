@@ -56,10 +56,17 @@ export function* renderSql<Table extends TableSchemaBase>(
 ): Generator<Parameterizable, string> {
 	switch (sqlAst.kind) {
 		case "select": {
-			const cols = Array.isArray(sqlAst.columns)
-				? sqlAst.columns.join(", ")
-				: "*";
-			let sql = `SELECT ${cols} FROM ${sqlAst.table}`;
+			let selection: string;
+			if (sqlAst.columns === "*") {
+				selection = "*";
+			} else {
+				const cols: string[] = [];
+				for (const col of sqlAst.columns) {
+					cols.push(yield* renderSqlExpression(col));
+				}
+				selection = cols.join(", ");
+			}
+			let sql = `SELECT ${selection} FROM ${sqlAst.table}`;
 			let paramCount = 0;
 			if (sqlAst.where) {
 				const whereSql = yield* renderSqlExpression(sqlAst.where);
@@ -151,9 +158,14 @@ export function compileSqlExpression<
 	];
 }
 
-export function compileSql<Table extends TableSchemaBase = TableSchemaBase>(
+export type CompiledQuery<Context> = readonly [
+	sql: string,
+	getParams: (context: Context) => unknown[],
+];
+
+export function compileSql<Table extends TableSchemaBase, Context>(
 	sqlAst: Source<Table>,
-): [sql: string, (context: unknown) => unknown[]] {
+): CompiledQuery<Context> {
 	const gen = renderSql(sqlAst);
 	const params: Parameterizable[] = [];
 	let next = gen.next();
