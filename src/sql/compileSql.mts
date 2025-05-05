@@ -51,8 +51,8 @@ function* renderSqlExpression(
 	assert.fail("Unsupported expression type in renderExpression");
 }
 
-export function* renderSql(
-	sqlAst: Source<TableSchemaBase>,
+export function* renderSql<Table extends TableSchemaBase>(
+	sqlAst: Source<Table>,
 ): Generator<Parameterizable, string> {
 	switch (sqlAst.kind) {
 		case "select": {
