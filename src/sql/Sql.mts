@@ -9,7 +9,7 @@ export type SqlOrderBy = {
 export type Select<Table extends TableSchemaBase = TableSchemaBase> = {
 	kind: "select";
 	table: string;
-	columns: "*";
+	columns: "*" | SqlExpression<Table>[];
 	where?: SqlExpression<Table>;
 	orderBy?: SqlOrderBy[];
 	limit?: Parameterizable;
@@ -18,14 +18,12 @@ export type Select<Table extends TableSchemaBase = TableSchemaBase> = {
 export type Insert<Table extends TableSchemaBase = TableSchemaBase> = {
 	kind: "insert";
 	table: string;
-	values: {
-		[key in keyof Row<Table>]: Parameterizable;
-	};
+	values: Record<keyof Row<Table>, Parameterizable>;
 	onConflict?: {
 		columns: (keyof Row<Table>)[];
 		do: {
 			kind: "update";
-			set: { [K in keyof Row<Table>]?: Parameterizable };
+			set: Record<keyof Row<Table>, Parameterizable>;
 		};
 	};
 };
@@ -33,9 +31,7 @@ export type Insert<Table extends TableSchemaBase = TableSchemaBase> = {
 export type Update<Table extends TableSchemaBase = TableSchemaBase> = {
 	kind: "update";
 	table: string;
-	set: {
-		[key in keyof Row<Table>]: Parameterizable;
-	};
+	set: Record<keyof Row<Table>, Parameterizable>;
 	where?: SqlExpression<Table>;
 };
 

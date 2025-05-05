@@ -12,12 +12,26 @@ import type {
 } from "../../types/TableSchema.mjs";
 import type { TableSchemaBase } from "../../types/TableSchema.mjs";
 import { compileSql } from "../../sql/compileSql.mjs";
-import type { Insert, Source } from "../../sql/Sql.mjs";
+import type { Delete, Insert, Select, Source, Update } from "../../sql/Sql.mjs";
 import {
 	ands,
 	type ParameterExpression,
+	type Parameterizable,
 	type SqlExpression,
 } from "../../sql/SqlExpression.mjs";
+import {
+	mkDelete,
+	mkEq,
+	mkGT,
+	mkGTE,
+	mkInsert,
+	mkLT,
+	mkParameter,
+	mkPkColumns,
+	mkPkParams,
+	mkSelect,
+	mkUpdate,
+} from "../../sql/mks.mjs";
 
 export class BetterSqlite3Storage<Table extends TableSchemaBase>
 	implements WritableStorage<Table>, ReadableStorage<Table>
@@ -76,29 +90,14 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 	upsert(row: Row<Table>): void {
 		const columns = Object.keys(row) as (keyof Row<Table>)[];
 		const values = Object.fromEntries(
-			columns.map((col) => [
-				col,
-				{
-					kind: "parameter" as const,
-					getValue: (row: Row<Table>) => row[col],
-				} as ParameterExpression,
-			]),
+			columns.map((col) => [col, mkParameter((row: Row<Table>) => row[col])]),
 		) as Record<keyof Row<Table>, ParameterExpression>;
 		const set = Object.fromEntries(
 			columns
 				.filter((col) => !this.primaryKeys.includes(col as string))
-				.map((col) => [
-					col,
-					{
-						kind: "parameter" as const,
-						getValue: (row: Row<Table>) => row[col],
-					} as ParameterExpression,
-				]),
+				.map((col) => [col, mkParameter((row: Row<Table>) => row[col])]),
 		) as Record<string, ParameterExpression>;
-		const insertAst: Insert<Table> = {
-			kind: "insert" as const,
-			table: this.tableName,
-			values,
+		const insertAst: Insert<Table> = mkInsert(this.schema, values, {
 			onConflict: {
 				columns: this.primaryKeys.map((pk) => pk.toString()),
 				do: {
@@ -106,7 +105,7 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 					set,
 				},
 			},
-		};
+		});
 		const [sql, getParams] = compileSql(insertAst);
 		const stmt = this.database.prepare(sql);
 		stmt.run(...getParams(row));
@@ -122,49 +121,23 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 		const set = Object.fromEntries(
 			columns.map((col) => [
 				col,
-				{
-					kind: "parameter" as const,
-					getValue: (ctx: {
+				mkParameter(
+					(ctx: {
 						changes: Partial<Row<Table>>;
 						key: PrimaryKeyRecord<Table>;
 					}) => ctx.changes[col],
-				} as ParameterExpression,
+				),
 			]),
 		) as Record<keyof Row<Table>, ParameterExpression>;
 
-		const pkColumns = {
-			kind: "tuple" as const,
-			expressions: this.primaryKeys.map((pk) => ({
-				kind: "column" as const,
-				name: pk,
-			})),
-		};
-		const pkParams = {
-			kind: "tuple" as const,
-			expressions: this.primaryKeys.map(
-				(pk) =>
-					({
-						kind: "parameter" as const,
-						getValue: (ctx: {
-							changes: Partial<Row<Table>>;
-							key: PrimaryKeyRecord<Table>;
-						}) => ctx.key[pk],
-					}) as import("../../sql/SqlExpression.mts").ParameterExpression,
-			),
-		};
-		const where: SqlExpression<Table> = {
-			kind: "binOp" as const,
-			operator: "=",
-			left: pkColumns,
-			right: pkParams,
-		};
+		const pkColumns = mkPkColumns(this.schema);
+		const pkParams = mkPkParams(
+			this.schema,
+			({ key }: { key: PrimaryKeyRecord<Table> }) => key,
+		);
+		const where: SqlExpression<Table> = mkEq(pkColumns, pkParams);
 
-		const updateAst: Source<Table> = {
-			kind: "update" as const,
-			table: this.tableName,
-			set,
-			where,
-		};
+		const updateAst: Update<Table> = mkUpdate(this.schema, set, where);
 
 		const [sql, getParamsRaw] = compileSql(updateAst);
 		const getParams = (
@@ -198,37 +171,20 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 	private compileFindMany<HasCursor extends boolean>(
 		pageInput: PageInput<Table>,
 		hasCursor: HasCursor,
-	): CompiledQuery<PageParameter<HasCursor>> {
+	): CompiledQuery<PageParameter<Table, HasCursor>> {
 		const selectCols = "*";
 
-		const pkColumns: SqlExpression<Table> = {
-			kind: "tuple",
-			expressions: this.primaryKeys.map((pk) => ({ kind: "column", name: pk })),
-		};
-		const pkParams: SqlExpression<Table> = {
-			kind: "tuple",
-			expressions: this.primaryKeys.map(
-				(pk) =>
-					({
-						kind: "parameter",
-						getValue: (context: PageParameter<true>) =>
-							context.cursor ? context.cursor[pk] : undefined,
-					}) as SqlExpression<Table>,
-			),
-		};
+		const pkColumns = mkPkColumns(this.schema);
+		const pkParams = mkPkParams(
+			this.schema,
+			(context: PageParameter<Table, true>) => context.cursor,
+		);
+
 		const cursorWhere: SqlExpression<Table> | undefined = hasCursor
-			? {
-					kind: "binOp",
-					operator: pageInput.kind === "leftClosed" ? ">" : "<",
-					left: pkColumns,
-					right: pkParams,
-				}
+			? (pageInput.kind === "leftClosed" ? mkGT : mkLT)(pkColumns, pkParams)
 			: undefined;
 
-		const ast: Source = {
-			kind: "select",
-			table: this.tableName,
-			columns: selectCols,
+		const ast: Select<Table> = mkSelect(this.schema, selectCols, {
 			where: ands(
 				[pageInput.filter, cursorWhere].filter((x) => x !== undefined),
 			),
@@ -245,11 +201,10 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 							column: pk,
 							direction: pageInput.kind === "leftClosed" ? "asc" : "desc",
 						})),
-			limit: {
-				kind: "parameter",
-				getValue: (context: PageParameter<HasCursor>) => context.limit,
-			},
-		};
+			limit: mkParameter(
+				(context: PageParameter<Table, HasCursor>) => context.limit,
+			),
+		});
 
 		const [queryString, getParams] = compileSql(ast);
 		return {
@@ -317,7 +272,7 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 
 		return {
 			rows: rows.map(getCursor),
-			rowCount,
+			// rowCount,
 			// biome-ignore lint/style/noNonNullAssertion: <explanation>
 			startCursor: rows.length > 0 ? getCursor(rows[0]!) : undefined,
 			// biome-ignore lint/style/noNonNullAssertion: <explanation>
@@ -331,19 +286,15 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 	private get compiledInsert(): CompiledQuery<Row<Table>> {
 		if (!this._compiledInsert) {
 			const columns = Object.keys(this.schema.columns);
-			const insertAst = {
-				kind: "insert" as const,
-				table: this.tableName,
-				values: Object.fromEntries(
+			const insertAst = mkInsert(
+				this.schema,
+				Object.fromEntries(
 					columns.map((col) => [
 						col,
-						{
-							kind: "parameter" as const,
-							getValue: (row: Row<Table>) => row[col],
-						} as import("../../sql/SqlExpression.mts").ParameterExpression,
+						mkParameter((row: Row<Table>) => row[col]),
 					]),
-				),
-			};
+				) as { [key in keyof Row<Table>]: Parameterizable },
+			);
 			const [sql, getParams] = compileSql(insertAst);
 			this._compiledInsert = {
 				statement: this.database.prepare(sql),
@@ -355,35 +306,14 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 
 	private get compiledDelete(): CompiledQuery<PrimaryKeyRecord<Table>> {
 		if (!this._compiledDelete) {
-			const pkColumns: SqlExpression<Table> = {
-				kind: "tuple",
-				expressions: this.primaryKeys.map((pk) => ({
-					kind: "column",
-					name: pk as string & keyof Table["columns"],
-				})),
-			};
-			const pkParams: SqlExpression<Table> = {
-				kind: "tuple",
-				expressions: this.primaryKeys.map(
-					(pk) =>
-						({
-							kind: "parameter",
-							getValue: (key: PrimaryKeyRecord<Table>) =>
-								key[pk as string & keyof Table["columns"]],
-						}) as SqlExpression<Table>,
-				),
-			};
-			const where: SqlExpression<Table> = {
-				kind: "binOp",
-				operator: "=",
-				left: pkColumns,
-				right: pkParams,
-			};
-			const deleteAst = {
-				kind: "delete" as const,
-				table: this.tableName,
-				where,
-			};
+			const pkColumns = mkPkColumns(this.schema);
+			const pkParams = mkPkParams(
+				this.schema,
+				(key: PrimaryKeyRecord<Table>) => key,
+			);
+			const where: SqlExpression<Table> = mkEq(pkColumns, pkParams);
+			const deleteAst: Delete<Table> = mkDelete(this.schema, where);
+
 			const [sql, getParams] = compileSql(deleteAst);
 			this._compiledDelete = {
 				statement: this.database.prepare(sql),
@@ -399,8 +329,11 @@ export type CompiledQuery<Context extends Record<string, unknown>> = {
 	getParams: (context?: Context) => unknown[];
 };
 
-type PageParameter<HasCursor extends boolean> = {
+type PageParameter<
+	TableSchema extends TableSchemaBase,
+	HasCursor extends boolean,
+> = {
 	limit: number;
 } & (HasCursor extends true
-	? { cursor: Record<string, unknown> }
+	? { cursor: PrimaryKeyRecord<TableSchema> }
 	: Record<string, unknown>);
