@@ -90,6 +90,20 @@ describe("compileSql", () => {
 		const params = getParams({});
 		expect(params).toEqual([]);
 	});
+	it("renders function expression with compileSqlExpression", () => {
+		const expr: SqlExpression<Table> = {
+			kind: "function",
+			name: "MAX",
+			args: [
+				{ kind: "column", name: "foo" },
+				{ kind: "constant", value: 100 },
+			],
+		};
+		const [sql, getParams] = compileSqlExpression(expr);
+		expect(sql).toBe("MAX(foo, ?)");
+		const params = getParams({});
+		expect(params).toEqual([100]);
+	});
 
 	it("renders insert statement with compileSql", () => {
 		const expr: Source = {

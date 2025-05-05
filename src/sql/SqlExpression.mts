@@ -37,7 +37,11 @@ export type UnOpExpression<T extends TableSchemaBase> = {
 	expression: SqlExpression<T, unknown>;
 	operator: "-" | "+" | "NOT";
 };
-
+export type FunctionExpression<T extends TableSchemaBase> = {
+	kind: "function";
+	name: string;
+	args: SqlExpression<T, unknown>[];
+};
 export type TupleExpression<T extends TableSchemaBase> = {
 	kind: "tuple";
 	expressions: SqlExpression<T, unknown>[];
@@ -49,6 +53,7 @@ export type SqlExpression<T extends TableSchemaBase, V = unknown> =
 	| ParameterExpression
 	| BinOpExpression<T>
 	| UnOpExpression<T>
+	| FunctionExpression<T>
 	| TupleExpression<T>;
 
 export type Parameterizable = ConstantExpression | ParameterExpression;

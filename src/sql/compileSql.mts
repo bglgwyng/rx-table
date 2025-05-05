@@ -30,6 +30,15 @@ function* renderSqlExpression(
 		return yield expr;
 	}
 
+	if (expr.kind === "function") {
+		const args: string[] = [];
+		for (const arg of expr.args) {
+			const argSql = yield* renderSqlExpression(arg);
+			args.push(argSql);
+		}
+		return `${expr.name}(${args.join(", ")})`;
+	}
+
 	if (expr.kind === "tuple") {
 		const placeholders: string[] = [];
 		for (const elems of expr.expressions) {
@@ -73,8 +82,8 @@ export function* renderSql(
 			let sql = `INSERT INTO ${sqlAst.table} (${keys.join(", ")}) VALUES (`;
 			const placeholders: string[] = [];
 			for (const k of keys) {
-				// biome-ignore lint/style/noNonNullAssertion: <explanation>
 				placeholders.push(
+					// biome-ignore lint/style/noNonNullAssertion: <explanation>
 					yield sqlAst.values[k as keyof Row<TableSchemaBase>]!,
 				);
 			}
@@ -84,8 +93,9 @@ export function* renderSql(
 			if (sqlAst.onConflict) {
 				sql += ` ON CONFLICT (${sqlAst.onConflict.columns.join(", ")}) DO UPDATE SET `;
 				const setKeys = Object.keys(sqlAst.onConflict.do.set);
-				sql += setKeys.map(k => `${k} = ?`).join(", ");
+				sql += setKeys.map((k) => `${k} = ?`).join(", ");
 				for (const k of setKeys) {
+					// biome-ignore lint/style/noNonNullAssertion: <explanation>
 					yield sqlAst.onConflict.do.set[k as keyof Row<TableSchemaBase>]!;
 				}
 			}
