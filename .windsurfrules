@@ -1,0 +1,9 @@
+## Rules
+
+1. Write test descriptions in English
+2. Write comments in English
+
+## Directories
+
+- src/RSql: RSql is restricted SQL to support reactive query
+- src/core/Dynamic: Dynamic is like `BehaviorSubject` in RxJS with delta instead of new value and without emission of the last value.
