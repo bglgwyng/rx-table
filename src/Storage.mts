@@ -14,7 +14,9 @@ export type Storage<T extends TableSchemaBase> = ReadableStorage<T> &
 
 export type ReadableStorage<T extends TableSchemaBase> = {
 	findUnique(key: PrimaryKeyRecord<T>): Row<T> | null;
-	findMany(pageInput: PageInit<T>): Page<T>;
+	findMany<Cursor extends PrimaryKeyRecord<T>>(
+		pageInput: PageInit<T, Cursor>,
+	): Page<T, Cursor>;
 };
 
 export type WritableStorage<T extends TableSchemaBase> = {

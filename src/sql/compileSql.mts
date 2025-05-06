@@ -34,8 +34,10 @@ function* renderSqlExpression(
 		const args: string[] = [];
 		for (const arg of expr.args) {
 			const argSql = yield* renderSqlExpression(arg);
+
 			args.push(argSql);
 		}
+		console.info(expr.name, expr.args, { args });
 		return `${expr.name}(${args.join(", ")})`;
 	}
 
@@ -46,6 +48,10 @@ function* renderSqlExpression(
 			placeholders.push(placeholder);
 		}
 		return `(${placeholders.join(", ")})`;
+	}
+
+	if (expr.kind === "asterisk") {
+		return "*";
 	}
 
 	assert.fail("Unsupported expression type in renderExpression");

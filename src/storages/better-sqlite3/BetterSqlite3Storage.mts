@@ -25,8 +25,10 @@ import {
 	type ParameterExpression,
 	type Parameterizable,
 	type SqlExpression,
+	type TupleExpression,
 } from "../../sql/SqlExpression.mjs";
 import {
+	mkColumn,
 	mkDelete,
 	mkEq,
 	mkGT,
@@ -36,6 +38,7 @@ import {
 	mkPkColumns,
 	mkPkParams,
 	mkSelect,
+	mkTuple,
 	mkUpdate,
 } from "../../sql/mks.mjs";
 import assert from "assert";
@@ -178,68 +181,123 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 	findMany<Cursor extends PrimaryKeyRecord<Table>>(
 		pageInput: PageInit<Table, Cursor>,
 	): Page<Table, Cursor> {
-		const { loadFirst, loadLast, loadNext, loadPrev, totalCount } =
-			this.compileFindMany(pageInput);
+		const {
+			loadFirst,
+			loadLast,
+			loadNext,
+			loadPrev,
+			countTotal,
+			countAfter,
+			countBefore,
+		} = this.compileFindMany<Cursor>(pageInput);
 
-		let rows: Row<Table>[] = [];
+		let rows: Cursor[] = [];
+		let itemAfterCount: number | undefined = undefined;
+		let itemBeforeCount: number | undefined = undefined;
 
 		if (pageInput.kind === "forward") {
 			const limit = pageInput.first;
 			if (pageInput.after === undefined) {
 				rows = loadFirst.statement.all(
 					...loadFirst.getParams({ limit }),
-				) as Row<Table>[];
+				) as Cursor[];
+				itemBeforeCount = 0;
 			} else {
 				rows = loadNext.statement.all(
 					...loadNext.getParams({
 						cursor: pageInput.after,
-						limit: pageInput.first,
+						limit,
 					}),
-				) as Row<Table>[];
+				) as Cursor[];
 			}
 		} else {
 			const limit = pageInput.last;
 			if (pageInput.before === undefined) {
 				rows = loadLast.statement.all(
 					...loadLast.getParams({ limit }),
-				) as Row<Table>[];
+				) as Cursor[];
 			} else {
 				rows = loadPrev.statement.all(
 					...loadPrev.getParams({
 						cursor: pageInput.before,
 						limit,
 					}),
-				) as Row<Table>[];
+				) as Cursor[];
 			}
 		}
 
-		const rowCount = (
-			totalCount.statement.get(...totalCount.getParams()) as {
-				cnt: number;
-			}
-		).cnt;
+		rows = pageInput.kind === "forward" ? rows : rows.reverse();
+		const { startCursor, endCursor } =
+			rows.length > 0
+				? { startCursor: rows[0], endCursor: rows.at(-1) }
+				: { startCursor: undefined, endCursor: undefined };
 
-		const getCursor = (row: Row<Table>): Cursor =>
-			Object.fromEntries(
-				pageInput.orderBy.map(({ column }) => [column, row[column]]),
-			) as Cursor;
+		if (itemAfterCount === undefined) {
+			if (rows.length > 0) {
+				// biome-ignore lint/style/noNonNullAssertion: <explanation>
+				const endCursor = rows.at(-1)!;
+				itemAfterCount = (
+					countAfter.statement.get(
+						...countAfter.getParams({ after: endCursor }),
+					) as { "COUNT(*)": number }
+				)["COUNT(*)"];
+			} else {
+				itemAfterCount = 0;
+			}
+		}
+		if (itemBeforeCount === undefined) {
+			if (rows.length > 0) {
+				// biome-ignore lint/style/noNonNullAssertion: <explanation>
+				const startCursor = rows[0]!;
+				itemBeforeCount = (
+					countBefore.statement.get(
+						...countBefore.getParams({ before: startCursor }),
+					) as {
+						"COUNT(*)": number;
+					}
+				)["COUNT(*)"];
+			} else {
+				itemBeforeCount = 0;
+			}
+		}
+		const rowCount = (
+			countTotal.statement.get(...countTotal.getParams()) as {
+				"COUNT(*)": number;
+			}
+		)["COUNT(*)"];
+
+		console.info({ beforeCount: itemBeforeCount, afterCount: itemAfterCount });
 
 		return {
-			rows: (pageInput.kind === "forward" ? rows : rows.reverse()).map(
-				getCursor,
-			),
+			rows,
 			rowCount,
-			// biome-ignore lint/style/noNonNullAssertion: <explanation>
-			startCursor: rows.length > 0 ? getCursor(rows[0]!) : undefined,
-			// biome-ignore lint/style/noNonNullAssertion: <explanation>
-			endCursor: rows.length > 0 ? getCursor(rows.at(-1)!) : undefined,
+			startCursor,
+			endCursor,
+			itemBeforeCount,
+			itemAfterCount,
 		};
 	}
-	prepareFindMany<Cursor extends PrimaryKeyRecord<Table>>(
-		pageInput: PageInit<Table, Cursor>,
-	) {
-		const { loadFirst, loadLast, loadNext, loadPrev, totalCount } =
-			this.compileFindMany(pageInput);
+
+	prepareFindMany<Cursor extends PrimaryKeyRecord<Table>>(options: {
+		filter?: SqlExpression<Table>;
+		orderBy: readonly {
+			column: PrimaryKey<Table>[number];
+			direction: "asc" | "desc";
+		}[];
+	}) {
+		const { filter, orderBy } = options;
+		const {
+			loadFirst,
+			loadLast,
+			loadNext,
+			loadPrev,
+			countTotal,
+			countAfter,
+			countBefore,
+		} = this.compileFindMany({
+			filter,
+			orderBy,
+		});
 
 		return {
 			loadForward: (pageInput: ForwardPageInit<Table, Cursor>) =>
@@ -264,12 +322,12 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 								limit: pageInput.last,
 							}),
 						),
-			loadTotalCount: () =>
+			countTotal: () =>
 				(
-					totalCount.statement.get(...totalCount.getParams()) as {
-						cnt: number;
+					countTotal.statement.get(...countTotal.getParams()) as {
+						"COUNT(*)": number;
 					}
-				).cnt,
+				)["COUNT(*)"],
 		};
 	}
 
@@ -313,9 +371,13 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 		return this._compiledDelete;
 	}
 
-	private compileFindMany<Cursor extends PrimaryKeyRecord<Table>>(
-		pageInput: PageInit<Table, Cursor>,
-	): CompiledQueriesForFindMany<Table, Cursor> {
+	private compileFindMany<Cursor extends PrimaryKeyRecord<Table>>(pageInput: {
+		filter?: SqlExpression<Table>;
+		orderBy: readonly {
+			column: string & keyof Cursor;
+			direction: "asc" | "desc";
+		}[];
+	}): CompiledQueriesForFindMany<Table, Cursor> {
 		assert(
 			this.schema.primaryKey.every((pk) =>
 				pageInput.orderBy.some((o) => o.column === pk),
@@ -327,70 +389,75 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 				pageInput.orderBy.every((o) => o.direction === "desc"),
 			"orderBy must be all ascending or all descending",
 		);
-		const selectCols = "*";
+		const cursorCols = pageInput.orderBy.map((o) => mkColumn(o.column));
+		const cursorAsTuple = mkTuple(cursorCols);
 
-		const pkColumns = mkPkColumns(this.schema);
+		const mkCursorParams = <Context, _ = unknown>(
+			getCursor: (context: Context) => Cursor,
+		): TupleExpression<Table> => ({
+			kind: "tuple",
+			expressions: pageInput.orderBy.map((col) => ({
+				kind: "parameter",
+				getValue: (ctx: Context) => getCursor(ctx)[col.column],
+			})),
+		});
 
 		// Use pkColumns, pkParams, selectCols from upper scope
 		const filter = pageInput.filter;
 		const orderBy = pageInput.orderBy;
 
 		// for load: no cursor, orderBy as is
-		const loadHeadAst: Select<Table> = mkSelect(this.schema, selectCols, {
-			where: ands([filter].filter((x) => x !== undefined)),
+		const loadHeadAst: Select<Table> = mkSelect(this.schema, cursorCols, {
+			where: filter,
 			orderBy: orderBy.map((o) => ({
 				column: o.column,
 				direction: o.direction,
 			})),
 			limit: mkParameter(
-				(context: PageParameter<Table, false>) => context.limit,
+				(context: PageParameter<Table, Cursor, false>) => context.limit,
 			),
 		});
 
 		// for load: no cursor, orderBy as is
-		const loadTailAst: Select<Table> = mkSelect(this.schema, selectCols, {
-			where: ands([filter].filter((x) => x !== undefined)),
+		const loadTailAst: Select<Table> = mkSelect(this.schema, cursorCols, {
+			where: filter,
 			orderBy: orderBy.map((o) => ({
 				column: o.column,
 				direction: invertDirection(o.direction),
 			})),
 			limit: mkParameter(
-				(context: PageParameter<Table, false>) => context.limit,
+				(context: PageParameter<Table, Cursor, false>) => context.limit,
 			),
 		});
 
 		// for loadMore: after cursor, forward order
-		const loadNextAst: Select<Table> = mkSelect(this.schema, selectCols, {
-			where: ands(
-				[
-					...(filter ? [filter] : []),
-					mkGT(
-						pkColumns,
-						mkPkParams(
-							this.schema,
-							(context: PageParameter<Table, true>) => context.cursor,
-						),
+		const loadNextAst: Select<Table> = mkSelect(this.schema, cursorCols, {
+			where: ands([
+				...(filter ? [filter] : []),
+				mkGT(
+					cursorAsTuple,
+					mkCursorParams(
+						(context: PageParameter<Table, Cursor, true>) => context.cursor,
 					),
-				].filter((x) => x !== undefined),
-			),
+				),
+			]),
 			orderBy: orderBy.map((o) => ({
 				column: o.column,
 				direction: o.direction,
 			})),
 			limit: mkParameter(
-				(context: PageParameter<Table, true>) => context.limit,
+				(context: PageParameter<Table, Cursor, true>) => context.limit,
 			),
 		});
 
 		// for loadPrevious: before cursor, reverse order
-		const loadPreviousAst: Select<Table> = mkSelect(this.schema, selectCols, {
+		const loadPreviousAst: Select<Table> = mkSelect(this.schema, cursorCols, {
 			where: ands([
 				...(filter ? [filter] : []),
 				mkLT(
-					pkColumns,
-					mkPkParams(
-						this.schema,
-						(context: PageParameter<Table, true>) => context.cursor,
+					cursorAsTuple,
+					mkCursorParams(
+						(context: PageParameter<Table, Cursor, true>) => context.cursor,
 					),
 				),
 			]),
@@ -399,7 +466,7 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 				direction: invertDirection(o.direction),
 			})),
 			limit: mkParameter(
-				(context: PageParameter<Table, true>) => context.limit,
+				(context: PageParameter<Table, Cursor, true>) => context.limit,
 			),
 		});
 
@@ -409,11 +476,53 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 				{
 					kind: "function",
 					name: "COUNT",
-					args: [{ kind: "constant", value: "*" }],
+					args: [{ kind: "asterisk" }],
 				},
 			],
 			{
 				where: filter,
+			},
+		);
+
+		// Count rows after the cursor (for forward pagination)
+		const countAfterAst: Select<Table> = mkSelect(
+			this.schema,
+			[
+				{
+					kind: "function",
+					name: "COUNT",
+					args: [{ kind: "asterisk" }],
+				},
+			],
+			{
+				where: ands([
+					...(filter ? [filter] : []),
+					mkGT(
+						cursorAsTuple,
+						mkCursorParams((context: { after: Cursor }) => context.after),
+					),
+				]),
+			},
+		);
+
+		// Count rows before the cursor (for backward pagination)
+		const countBeforeAst: Select<Table> = mkSelect(
+			this.schema,
+			[
+				{
+					kind: "function",
+					name: "COUNT",
+					args: [{ kind: "asterisk" }],
+				},
+			],
+			{
+				where: ands([
+					...(filter ? [filter] : []),
+					mkLT(
+						cursorAsTuple,
+						mkCursorParams((context: { before: Cursor }) => context.before),
+					),
+				]),
 			},
 		);
 
@@ -422,7 +531,9 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 			loadLast: this.prepareStatement(compileSql(loadTailAst)),
 			loadNext: this.prepareStatement(compileSql(loadNextAst)),
 			loadPrev: this.prepareStatement(compileSql(loadPreviousAst)),
-			totalCount: this.prepareStatement(compileSql(totalCountAst)),
+			countTotal: this.prepareStatement(compileSql(totalCountAst)),
+			countAfter: this.prepareStatement(compileSql(countAfterAst)),
+			countBefore: this.prepareStatement(compileSql(countBeforeAst)),
 		};
 	}
 
@@ -444,20 +555,27 @@ export type PreparedStatement<Context, Row = unknown> = {
 
 type PageParameter<
 	TableSchema extends TableSchemaBase,
+	Cursor extends PrimaryKeyRecord<TableSchema>,
 	HasCursor extends boolean,
 > = {
 	limit: number;
-} & (HasCursor extends true
-	? { cursor: PrimaryKeyRecord<TableSchema> }
-	: Record<string, unknown>);
+} & (HasCursor extends true ? { cursor: Cursor } : Record<string, unknown>);
 
 type CompiledQueriesForFindMany<
 	TableSchema extends TableSchemaBase,
 	Cursor extends PrimaryKeyRecord<TableSchema>,
 > = {
-	loadFirst: PreparedStatement<PageParameter<TableSchema, false>, Cursor>;
-	loadLast: PreparedStatement<PageParameter<TableSchema, false>, Cursor>;
-	loadNext: PreparedStatement<PageParameter<TableSchema, true>, Cursor>;
-	loadPrev: PreparedStatement<PageParameter<TableSchema, true>, Cursor>;
-	totalCount: PreparedStatement<never, { cnt: number }>;
+	loadFirst: PreparedStatement<
+		PageParameter<TableSchema, Cursor, false>,
+		Cursor
+	>;
+	loadLast: PreparedStatement<
+		PageParameter<TableSchema, Cursor, false>,
+		Cursor
+	>;
+	loadNext: PreparedStatement<PageParameter<TableSchema, Cursor, true>, Cursor>;
+	loadPrev: PreparedStatement<PageParameter<TableSchema, Cursor, true>, Cursor>;
+	countTotal: PreparedStatement<never, { "COUNT(*)": number }>;
+	countAfter: PreparedStatement<{ after: Cursor }, { "COUNT(*)": number }>;
+	countBefore: PreparedStatement<{ before: Cursor }, { "COUNT(*)": number }>;
 };

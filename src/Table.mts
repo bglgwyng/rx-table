@@ -122,6 +122,8 @@ export class Table<T extends TableSchemaBase>
 								rowCount: page.rowCount,
 								endCursor: page.endCursor,
 								startCursor: page.startCursor,
+								itemBeforeCount: page.itemBeforeCount,
+								itemAfterCount: page.itemAfterCount,
 							},
 						]);
 					}
@@ -133,6 +135,8 @@ export class Table<T extends TableSchemaBase>
 								rowCount: page.rowCount,
 								endCursor: page.endCursor,
 								startCursor: page.startCursor,
+								itemBeforeCount: page.itemBeforeCount,
+								itemAfterCount: page.itemAfterCount,
 							},
 						]);
 					}
@@ -143,6 +147,7 @@ export class Table<T extends TableSchemaBase>
 					resetOnRefCountZero: () =>
 						timer(10 * 1000).pipe(
 							tap(() => {
+								// FIXME:
 								// this.rows.delete(this.getKeyTuple(e));
 							}),
 						),

@@ -46,6 +46,9 @@ export type TupleExpression<T extends TableSchemaBase> = {
 	kind: "tuple";
 	expressions: SqlExpression<T, unknown>[];
 };
+export type AsteriskExpression<T extends TableSchemaBase> = {
+	kind: "asterisk";
+};
 
 export type SqlExpression<T extends TableSchemaBase, V = unknown> =
 	| ColumnExpression<T>
@@ -54,7 +57,8 @@ export type SqlExpression<T extends TableSchemaBase, V = unknown> =
 	| BinOpExpression<T>
 	| UnOpExpression<T>
 	| FunctionExpression<T>
-	| TupleExpression<T>;
+	| TupleExpression<T>
+	| AsteriskExpression<T>;
 
 export type Parameterizable = ConstantExpression | ParameterExpression;
 

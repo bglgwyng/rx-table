@@ -25,6 +25,8 @@ export type Page<
 	rowCount: number;
 	endCursor: unknown;
 	startCursor: unknown;
+	itemBeforeCount: number;
+	itemAfterCount: number;
 };
 // Left-closed: only after is set
 
@@ -55,8 +57,8 @@ export type PageInit<
 	| BackwardPageInit<TableSchema, Cursor>
 ) & {
 	orderBy: {
-		column: ColumnName<TableSchema>;
-		direction: "asc" | "desc";
+		column: string & keyof Cursor;
+		direction: Direction;
 	}[];
 	filter?: SqlExpression<TableSchema, unknown>;
 };

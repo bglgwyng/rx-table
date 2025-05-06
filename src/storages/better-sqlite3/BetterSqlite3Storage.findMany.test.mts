@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import Database from "better-sqlite3";
 import { BetterSqlite3Storage } from "./BetterSqlite3Storage.mjs";
 import { sqlExpressionToFilterFn } from "../../util/sqlExpressionToFilterFn.mjs";
-import type { PageInit } from "../../Page.mjs";
+import type { Page, PageInit } from "../../Page.mjs";
 import type { Row } from "../../types/TableSchema.mjs";
 import type { SqlExpression } from "../../sql/SqlExpression.mjs";
 import type { TableSchemaBase } from "../../types/TableSchema.mjs";
@@ -32,7 +32,7 @@ describe("SqliteStorage.findMany", () => {
 			storage.insert({ id: i, name: `User${i}`, age: 20 + i });
 		}
 		// forward pagination
-		const forwardInput: PageInit<UserTable> = {
+		const forwardInput: PageInit<UserTable, { id: number }> = {
 			kind: "forward",
 			after: { id: 3 },
 			first: 3,
@@ -40,8 +40,10 @@ describe("SqliteStorage.findMany", () => {
 		};
 		const forwardPage = storage.findMany(forwardInput);
 		const forwardIds = Array.from(forwardPage.rows).map((pk) => pk.id);
+		expect(forwardPage.itemBeforeCount).toBe(3);
+		expect(forwardPage.itemAfterCount).toBe(4);
 		// backward pagination
-		const backwardInput: PageInit<UserTable> = {
+		const backwardInput: PageInit<UserTable, { id: number }> = {
 			kind: "backward",
 			before: { id: 7 },
 			last: 3,
@@ -49,6 +51,8 @@ describe("SqliteStorage.findMany", () => {
 		};
 		const backwardPage = storage.findMany(backwardInput);
 		const backwardIds = Array.from(backwardPage.rows).map((pk) => pk.id);
+		expect(backwardPage.itemBeforeCount).toBe(3);
+		expect(backwardPage.itemAfterCount).toBe(4);
 		// forward: [4,5,6], backward: [4,5,6]
 		expect(backwardIds).toEqual([4, 5, 6]);
 	});
@@ -62,7 +66,7 @@ describe("SqliteStorage.findMany", () => {
 		for (let i = 1; i <= 3; ++i) {
 			storage.insert({ id: i, name: `User${i}`, age: 20 + i });
 		}
-		const pageInput: PageInit<UserTable> = {
+		const pageInput: PageInit<UserTable, { id: number; name: string }> = {
 			kind: "forward",
 			first: 2,
 			orderBy: [
@@ -91,7 +95,7 @@ describe("SqliteStorage.findMany", () => {
 	});
 
 	it("left-closed: paginates forward with after+first", () => {
-		const pageInput: PageInit<UserTable> = {
+		const pageInput: PageInit<UserTable, { id: number }> = {
 			kind: "forward",
 			after: { id: 3 },
 			first: 4,
@@ -106,7 +110,7 @@ describe("SqliteStorage.findMany", () => {
 	});
 
 	it("right-closed: paginates backward with before+last", () => {
-		const pageInput: PageInit<UserTable> = {
+		const pageInput: PageInit<UserTable, { id: number }> = {
 			kind: "backward",
 			before: { id: 8 },
 			last: 3,
@@ -127,7 +131,7 @@ describe("SqliteStorage.findMany", () => {
 			left: { kind: "column", name: "age" },
 			right: { kind: "constant", value: 25 },
 		};
-		const pageInput: PageInit<UserTable> = {
+		const pageInput: PageInit<UserTable, { id: number }> = {
 			kind: "forward",
 			first: 2,
 			orderBy: [{ column: "id", direction: "asc" }],
@@ -149,7 +153,7 @@ describe("SqliteStorage.findMany", () => {
 	});
 
 	it("supports orderBy descending", () => {
-		const pageInput: PageInit<UserTable> = {
+		const pageInput: PageInit<UserTable, { id: number }> = {
 			kind: "forward",
 			first: 3,
 			orderBy: [{ column: "id", direction: "desc" }],
@@ -190,18 +194,18 @@ describe("SqliteStorage.findMany", () => {
 		let after: { id: number } | undefined = undefined;
 		const allFetchedIds: number[] = [];
 		while (true) {
-			const pageInput = {
+			const pageInput: PageInit<UserTable, { id: number }> = {
 				kind: "forward" as const,
 				first: pageSize,
 				orderBy: [
 					{
-						column: "id" as keyof UserTable["columns"],
-						direction: "asc" as const,
+						column: "id",
+						direction: "asc",
 					},
 				],
 				...(after ? { after } : {}),
 			};
-			const page = storage.findMany(pageInput);
+			const page: Page<UserTable, { id: number }> = storage.findMany(pageInput);
 			const ids = Array.from(page.rows).map((pk) => pk.id);
 			if (ids.length === 0) break;
 			allFetchedIds.push(...ids);
@@ -250,22 +254,20 @@ describe("SqliteStorage.findMany with composite key", () => {
 		let after: { id: number; sub_id: number } | undefined = undefined;
 		const allFetched: Array<{ id: number; sub_id: number }> = [];
 		while (true) {
-			const pageInput = {
+			const pageInput: PageInit<
+				CompositeTable,
+				{ id: number; sub_id: number }
+			> = {
 				kind: "forward" as const,
 				first: pageSize,
 				orderBy: [
-					{
-						column: "id" as keyof CompositeTable["columns"],
-						direction: "asc" as const,
-					},
-					{
-						column: "sub_id" as keyof CompositeTable["columns"],
-						direction: "asc" as const,
-					},
+					{ column: "id", direction: "asc" },
+					{ column: "sub_id", direction: "asc" },
 				],
 				...(after ? { after } : {}),
 			};
-			const page = storage.findMany(pageInput);
+			const page: Page<CompositeTable, { id: number; sub_id: number }> =
+				storage.findMany(pageInput);
 			const keys = Array.from(page.rows);
 			// Debug: log actual rows returned
 			// eslint-disable-next-line no-console

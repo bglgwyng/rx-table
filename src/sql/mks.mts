@@ -20,7 +20,7 @@ export function mkInsert<Table extends TableSchemaBase>(
 			columns: (keyof Row<Table>)[];
 			do: {
 				kind: "update";
-				set: { [K in keyof Row<Table>]?: Parameterizable };
+				set: Record<keyof Row<Table>, Parameterizable>;
 			};
 		};
 	},
@@ -144,6 +144,15 @@ export function mkParameter<Context>(
 	return {
 		kind: "parameter",
 		getValue,
+	};
+}
+
+export function mkTuple<Table extends TableSchemaBase>(
+	expressions: SqlExpression<Table>[],
+): SqlExpression<Table> {
+	return {
+		kind: "tuple",
+		expressions,
 	};
 }
 
