@@ -160,7 +160,7 @@ export function compileSqlExpression<
 
 export type CompiledQuery<Context> = readonly [
 	sql: string,
-	getParams: (context: Context) => unknown[],
+	getParams: (context?: Context) => unknown[],
 ];
 
 export function compileSql<Table extends TableSchemaBase, Context>(

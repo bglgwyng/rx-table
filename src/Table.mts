@@ -14,7 +14,7 @@ import {
 } from "rxjs";
 import type { Storage } from "./Storage.mjs";
 import { type Dynamic, createDynamic } from "./core/Dynamic.mjs";
-import type { Page, PageDelta, PageInput } from "./Page.mjs";
+import type { Page, PageDelta, PageEvent, PageInput } from "./Page.mjs";
 import type {
 	ReadableTable,
 	TableEvent,
@@ -98,16 +98,20 @@ export class Table<T extends TableSchemaBase>
 		this.rows.set(keyTuple, dynamic);
 		return dynamic;
 	}
-	findMany(pageInput: PageInput<T>): Dynamic<Page<T>, PageDelta<T>> {
+	findMany<Cursor extends PrimaryKeyRecord<T>>(
+		pageInput: PageInput<T, Cursor>,
+		pageEvent: Observable<PageEvent>,
+	): Dynamic<Page<T, Cursor>, PageDelta<T>> {
 		const page = this.storage.findMany(pageInput);
 		const filter = pageInput.filter
 			? sqlExpressionToFilterFn(pageInput.filter)
 			: () => true;
-		return createDynamic<Page<T>, PageDelta<T>>(
+
+		return createDynamic<Page<T, Cursor>, PageDelta<T>>(
 			page,
 			this.events.pipe(
 				concatAll(),
-				mergeMap((e): Observable<[PageDelta<T>, Page<T>]> => {
+				mergeMap((e): Observable<[PageDelta<T>, Page<T, Cursor>]> => {
 					const row = this.getRow(this.getKeyTuple(e));
 					if (!filter(row as Row<T>)) return EMPTY;
 					if (e.kind === "insert") {

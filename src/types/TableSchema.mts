@@ -1,5 +1,6 @@
+import type { Observable } from "rxjs";
 import type { Dynamic } from "../core/Dynamic.mjs";
-import type { PageInput, Page, PageDelta } from "../Page.mjs";
+import type { PageInput, Page, PageDelta, PageEvent } from "../Page.mjs";
 
 export interface TableSchemaBase {
 	name: string;
@@ -37,7 +38,10 @@ export type PrimaryKeyTuple<T extends TableSchemaBase> =
 
 export type ReadableTable<T extends TableSchemaBase> = {
 	findUnique(key: PrimaryKeyRecord<T>): Dynamic<Row<T> | null, void>;
-	findMany(pageInput: PageInput<T>): Dynamic<Page<T>, PageDelta<T>>;
+	findMany<Cursor extends PrimaryKeyRecord<T>>(
+		pageInput: PageInput<T, Cursor>,
+		pageEvent: Observable<PageEvent>,
+	): Dynamic<Page<T, Cursor>, PageDelta<T>>;
 };
 
 export type WritableTable<T extends TableSchemaBase> = {

@@ -17,36 +17,54 @@ export type PageDelta<T extends TableSchemaBase> = (
 	  }
 )[];
 
-export type Page<T extends TableSchemaBase> = {
-	rows: Iterable<PrimaryKeyRecord<T>>;
+export type Page<
+	TableSchema extends TableSchemaBase,
+	Cursor extends PrimaryKeyRecord<TableSchema>,
+> = {
+	rows: Iterable<Cursor>;
 	rowCount: number;
 	endCursor: unknown;
 	startCursor: unknown;
 };
 // Left-closed: only after is set
 
-export type ForwardPageInput<T extends TableSchemaBase> = {
+export type ForwardPageInput<
+	TableSchema extends TableSchemaBase,
+	Cursor extends PrimaryKeyRecord<TableSchema>,
+> = {
 	kind: "forward";
-	after?: PrimaryKeyRecord<T>;
+	after?: Cursor;
 	first: number;
 };
 // Right-closed: only before is set
 
-export type BackwardPageInput<T extends TableSchemaBase> = {
+export type BackwardPageInput<
+	TableSchema extends TableSchemaBase,
+	Cursor extends PrimaryKeyRecord<TableSchema>,
+> = {
 	kind: "backward";
-	before?: PrimaryKeyRecord<T>;
+	before?: Cursor;
 	last: number;
 };
 
-export type PageInput<T extends TableSchemaBase> = (
-	| ForwardPageInput<T>
-	| BackwardPageInput<T>
+export type PageInput<
+	TableSchema extends TableSchemaBase,
+	Cursor extends PrimaryKeyRecord<TableSchema>,
+> = (
+	| ForwardPageInput<TableSchema, Cursor>
+	| BackwardPageInput<TableSchema, Cursor>
 ) & {
 	orderBy: {
-		column: ColumnName<T>;
+		column: ColumnName<TableSchema>;
 		direction: "asc" | "desc";
 	}[];
-	filter?: SqlExpression<T, unknown>;
+	filter?: SqlExpression<TableSchema, unknown>;
+};
+
+export type PageEvent = {
+	kind: "loadMore" | "loadPrev";
+	count: number;
+	retainCount: number;
 };
 
 export type PageInputDelta =
