@@ -24,7 +24,7 @@ export function testStorageImplementation(
 	name: string,
 	create: () => Storage<UserTable>,
 ) {
-	describe(`${name} Storage 인터페이스`, () => {
+	describe(`${name} Storage interface`, () => {
 		let storage: Storage<UserTable>;
 
 		beforeEach(() => {
