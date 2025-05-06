@@ -28,7 +28,7 @@ export type Page<
 };
 // Left-closed: only after is set
 
-export type ForwardPageInput<
+export type ForwardPageInit<
 	TableSchema extends TableSchemaBase,
 	Cursor extends PrimaryKeyRecord<TableSchema>,
 > = {
@@ -38,7 +38,7 @@ export type ForwardPageInput<
 };
 // Right-closed: only before is set
 
-export type BackwardPageInput<
+export type BackwardPageInit<
 	TableSchema extends TableSchemaBase,
 	Cursor extends PrimaryKeyRecord<TableSchema>,
 > = {
@@ -47,12 +47,12 @@ export type BackwardPageInput<
 	last: number;
 };
 
-export type PageInput<
+export type PageInit<
 	TableSchema extends TableSchemaBase,
 	Cursor extends PrimaryKeyRecord<TableSchema>,
 > = (
-	| ForwardPageInput<TableSchema, Cursor>
-	| BackwardPageInput<TableSchema, Cursor>
+	| ForwardPageInit<TableSchema, Cursor>
+	| BackwardPageInit<TableSchema, Cursor>
 ) & {
 	orderBy: {
 		column: ColumnName<TableSchema>;

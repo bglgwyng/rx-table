@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import Database from "better-sqlite3";
 import { BetterSqlite3Storage } from "./BetterSqlite3Storage.mjs";
 import { sqlExpressionToFilterFn } from "../../util/sqlExpressionToFilterFn.mjs";
-import type { PageInput } from "../../Page.mjs";
+import type { PageInit } from "../../Page.mjs";
 import type { Row } from "../../types/TableSchema.mjs";
 import type { SqlExpression } from "../../sql/SqlExpression.mjs";
 import type { TableSchemaBase } from "../../types/TableSchema.mjs";
@@ -24,13 +24,15 @@ type UserTable = typeof userSchema;
 describe("SqliteStorage.findMany", () => {
 	it("returns results in orderBy direction for before+last (backward) pagination (Relay spec)", () => {
 		const db = new Database(":memory:");
-		db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)");
+		db.exec(
+			"CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)",
+		);
 		const storage = new BetterSqlite3Storage<UserTable>(userSchema, db);
 		for (let i = 1; i <= 10; ++i) {
 			storage.insert({ id: i, name: `User${i}`, age: 20 + i });
 		}
 		// forward pagination
-		const forwardInput: PageInput<UserTable> = {
+		const forwardInput: PageInit<UserTable> = {
 			kind: "forward",
 			after: { id: 3 },
 			first: 3,
@@ -39,7 +41,7 @@ describe("SqliteStorage.findMany", () => {
 		const forwardPage = storage.findMany(forwardInput);
 		const forwardIds = Array.from(forwardPage.rows).map((pk) => pk.id);
 		// backward pagination
-		const backwardInput: PageInput<UserTable> = {
+		const backwardInput: PageInit<UserTable> = {
 			kind: "backward",
 			before: { id: 7 },
 			last: 3,
@@ -53,12 +55,14 @@ describe("SqliteStorage.findMany", () => {
 
 	it("throws if orderBy directions are mixed (asc/desc)", () => {
 		const db = new Database(":memory:");
-		db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)");
+		db.exec(
+			"CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)",
+		);
 		const storage = new BetterSqlite3Storage<UserTable>(userSchema, db);
 		for (let i = 1; i <= 3; ++i) {
 			storage.insert({ id: i, name: `User${i}`, age: 20 + i });
 		}
-		const pageInput: PageInput<UserTable> = {
+		const pageInput: PageInit<UserTable> = {
 			kind: "forward",
 			first: 2,
 			orderBy: [
@@ -67,7 +71,7 @@ describe("SqliteStorage.findMany", () => {
 			],
 		};
 		expect(() => storage.findMany(pageInput)).toThrow(
-			/orderBy must be all ascending or all descending/
+			/orderBy must be all ascending or all descending/,
 		);
 	});
 
@@ -87,7 +91,7 @@ describe("SqliteStorage.findMany", () => {
 	});
 
 	it("left-closed: paginates forward with after+first", () => {
-		const pageInput: PageInput<UserTable> = {
+		const pageInput: PageInit<UserTable> = {
 			kind: "forward",
 			after: { id: 3 },
 			first: 4,
@@ -102,7 +106,7 @@ describe("SqliteStorage.findMany", () => {
 	});
 
 	it("right-closed: paginates backward with before+last", () => {
-		const pageInput: PageInput<UserTable> = {
+		const pageInput: PageInit<UserTable> = {
 			kind: "backward",
 			before: { id: 8 },
 			last: 3,
@@ -123,7 +127,7 @@ describe("SqliteStorage.findMany", () => {
 			left: { kind: "column", name: "age" },
 			right: { kind: "constant", value: 25 },
 		};
-		const pageInput: PageInput<UserTable> = {
+		const pageInput: PageInit<UserTable> = {
 			kind: "forward",
 			first: 2,
 			orderBy: [{ column: "id", direction: "asc" }],
@@ -145,7 +149,7 @@ describe("SqliteStorage.findMany", () => {
 	});
 
 	it("supports orderBy descending", () => {
-		const pageInput: PageInput<UserTable> = {
+		const pageInput: PageInit<UserTable> = {
 			kind: "forward",
 			first: 3,
 			orderBy: [{ column: "id", direction: "desc" }],

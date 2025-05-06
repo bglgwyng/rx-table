@@ -1,4 +1,4 @@
-import type { Page, PageInput } from "./Page.mjs";
+import type { Page, PageInit } from "./Page.mjs";
 import type {
 	PrimaryKey,
 	PrimaryKeyRecord,
@@ -14,7 +14,7 @@ export type Storage<T extends TableSchemaBase> = ReadableStorage<T> &
 
 export type ReadableStorage<T extends TableSchemaBase> = {
 	findUnique(key: PrimaryKeyRecord<T>): Row<T> | null;
-	findMany(pageInput: PageInput<T>): Page<T>;
+	findMany(pageInput: PageInit<T>): Page<T>;
 };
 
 export type WritableStorage<T extends TableSchemaBase> = {

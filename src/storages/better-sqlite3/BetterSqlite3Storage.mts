@@ -6,10 +6,10 @@ import type {
 } from "../../Storage.mjs";
 import {
 	invertDirection,
-	type BackwardPageInput,
-	type ForwardPageInput,
+	type BackwardPageInit,
+	type ForwardPageInit,
 	type Page,
-	type PageInput,
+	type PageInit,
 } from "../../Page.mjs";
 import type {
 	ColumnName,
@@ -176,7 +176,7 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 	}
 
 	findMany<Cursor extends PrimaryKeyRecord<Table>>(
-		pageInput: PageInput<Table, Cursor>,
+		pageInput: PageInit<Table, Cursor>,
 	): Page<Table, Cursor> {
 		const { loadFirst, loadLast, loadNext, loadPrev, totalCount } =
 			this.compileFindMany(pageInput);
@@ -236,13 +236,13 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 		};
 	}
 	prepareFindMany<Cursor extends PrimaryKeyRecord<Table>>(
-		pageInput: PageInput<Table, Cursor>,
+		pageInput: PageInit<Table, Cursor>,
 	) {
 		const { loadFirst, loadLast, loadNext, loadPrev, totalCount } =
 			this.compileFindMany(pageInput);
 
 		return {
-			loadForward: (pageInput: ForwardPageInput<Table, Cursor>) =>
+			loadForward: (pageInput: ForwardPageInit<Table, Cursor>) =>
 				pageInput.after === undefined
 					? loadFirst.statement.all(
 							...loadFirst.getParams({ limit: pageInput.first }),
@@ -253,7 +253,7 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 								limit: pageInput.first,
 							}),
 						),
-			loadBackward: (pageInput: BackwardPageInput<Table, Cursor>) =>
+			loadBackward: (pageInput: BackwardPageInit<Table, Cursor>) =>
 				pageInput.before === undefined
 					? loadLast.statement.all(
 							...loadLast.getParams({ limit: pageInput.last }),
@@ -314,7 +314,7 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 	}
 
 	private compileFindMany<Cursor extends PrimaryKeyRecord<Table>>(
-		pageInput: PageInput<Table, Cursor>,
+		pageInput: PageInit<Table, Cursor>,
 	): CompiledQueriesForFindMany<Table, Cursor> {
 		assert(
 			this.schema.primaryKey.every((pk) =>
