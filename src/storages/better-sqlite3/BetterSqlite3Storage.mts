@@ -198,31 +198,23 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 		if (pageInput.kind === "forward") {
 			const limit = pageInput.first;
 			if (pageInput.after === undefined) {
-				rows = loadFirst.statement.all(
-					...loadFirst.getParams({ limit }),
-				) as Cursor[];
+				rows = loadFirst({ limit }) as Cursor[];
 				itemBeforeCount = 0;
 			} else {
-				rows = loadNext.statement.all(
-					...loadNext.getParams({
-						cursor: pageInput.after,
-						limit,
-					}),
-				) as Cursor[];
+				rows = loadNext({
+					cursor: pageInput.after,
+					limit,
+				}) as Cursor[];
 			}
 		} else {
 			const limit = pageInput.last;
 			if (pageInput.before === undefined) {
-				rows = loadLast.statement.all(
-					...loadLast.getParams({ limit }),
-				) as Cursor[];
+				rows = loadLast({ limit }) as Cursor[];
 			} else {
-				rows = loadPrev.statement.all(
-					...loadPrev.getParams({
-						cursor: pageInput.before,
-						limit,
-					}),
-				) as Cursor[];
+				rows = loadPrev({
+					cursor: pageInput.before,
+					limit,
+				}) as Cursor[];
 			}
 		}
 
@@ -236,11 +228,8 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 			if (rows.length > 0) {
 				// biome-ignore lint/style/noNonNullAssertion: <explanation>
 				const endCursor = rows.at(-1)!;
-				itemAfterCount = (
-					countAfter.statement.get(
-						...countAfter.getParams({ after: endCursor }),
-					) as { "COUNT(*)": number }
-				)["COUNT(*)"];
+				// biome-ignore lint/style/noNonNullAssertion: <explanation>
+				itemAfterCount = countAfter({ after: endCursor })!["COUNT(*)"];
 			} else {
 				itemAfterCount = 0;
 			}
@@ -249,22 +238,14 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 			if (rows.length > 0) {
 				// biome-ignore lint/style/noNonNullAssertion: <explanation>
 				const startCursor = rows[0]!;
-				itemBeforeCount = (
-					countBefore.statement.get(
-						...countBefore.getParams({ before: startCursor }),
-					) as {
-						"COUNT(*)": number;
-					}
-				)["COUNT(*)"];
+				// biome-ignore lint/style/noNonNullAssertion: <explanation>
+				itemBeforeCount = countBefore({ before: startCursor })!["COUNT(*)"];
 			} else {
 				itemBeforeCount = 0;
 			}
 		}
-		const rowCount = (
-			countTotal.statement.get(...countTotal.getParams()) as {
-				"COUNT(*)": number;
-			}
-		)["COUNT(*)"];
+		// biome-ignore lint/style/noNonNullAssertion: <explanation>
+		const rowCount = countTotal()!["COUNT(*)"];
 
 		console.info({ beforeCount: itemBeforeCount, afterCount: itemAfterCount });
 
@@ -302,32 +283,20 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 		return {
 			loadForward: (pageInput: ForwardPageInit<Table, Cursor>) =>
 				pageInput.after === undefined
-					? loadFirst.statement.all(
-							...loadFirst.getParams({ limit: pageInput.first }),
-						)
-					: loadNext.statement.all(
-							...loadNext.getParams({
-								cursor: pageInput.after,
-								limit: pageInput.first,
-							}),
-						),
+					? loadFirst({ limit: pageInput.first })
+					: loadNext({
+							cursor: pageInput.after,
+							limit: pageInput.first,
+						}),
 			loadBackward: (pageInput: BackwardPageInit<Table, Cursor>) =>
 				pageInput.before === undefined
-					? loadLast.statement.all(
-							...loadLast.getParams({ limit: pageInput.last }),
-						)
-					: loadPrev.statement.all(
-							...loadPrev.getParams({
-								cursor: pageInput.before,
-								limit: pageInput.last,
-							}),
-						),
-			countTotal: () =>
-				(
-					countTotal.statement.get(...countTotal.getParams()) as {
-						"COUNT(*)": number;
-					}
-				)["COUNT(*)"],
+					? loadLast({ limit: pageInput.last })
+					: loadPrev({
+							cursor: pageInput.before,
+							limit: pageInput.last,
+						}),
+			// biome-ignore lint/style/noNonNullAssertion: <explanation>
+			countTotal: () => countTotal()!["COUNT(*)"],
 		};
 	}
 
@@ -527,13 +496,13 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 		);
 
 		return {
-			loadFirst: this.prepareStatement(compileSql(loadHeadAst)),
-			loadLast: this.prepareStatement(compileSql(loadTailAst)),
-			loadNext: this.prepareStatement(compileSql(loadNextAst)),
-			loadPrev: this.prepareStatement(compileSql(loadPreviousAst)),
-			countTotal: this.prepareStatement(compileSql(totalCountAst)),
-			countAfter: this.prepareStatement(compileSql(countAfterAst)),
-			countBefore: this.prepareStatement(compileSql(countBeforeAst)),
+			loadFirst: this.prepareQueryAll(compileSql(loadHeadAst)),
+			loadLast: this.prepareQueryAll(compileSql(loadTailAst)),
+			loadNext: this.prepareQueryAll(compileSql(loadNextAst)),
+			loadPrev: this.prepareQueryAll(compileSql(loadPreviousAst)),
+			countTotal: this.prepareQueryOne(compileSql(totalCountAst)),
+			countAfter: this.prepareQueryOne(compileSql(countAfterAst)),
+			countBefore: this.prepareQueryOne(compileSql(countBeforeAst)),
 		};
 	}
 
@@ -546,12 +515,35 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 			getParams: getParams as (context?: Context) => Row[],
 		};
 	}
+	private prepareQueryAll<Context, Row = unknown>([
+		sql,
+		getParams,
+	]: CompiledQuery<Context>): PreparedQueryAll<Context, Row> {
+		return (context?: Context) =>
+			this.database.prepare(sql).all(...getParams(context)) as Row[];
+	}
+
+	private prepareQueryOne<Context, Row = unknown>([
+		sql,
+		getParams,
+	]: CompiledQuery<Context>): PreparedQueryOne<Context, Row> {
+		return (context?: Context) =>
+			this.database.prepare(sql).get(...getParams(context)) as Row;
+	}
 }
 
 export type PreparedStatement<Context, Row = unknown> = {
 	statement: Statement;
 	getParams: (context?: Context) => Row[];
 };
+
+export type PreparedQueryAll<Context, Row = unknown> = (
+	context?: Context,
+) => Row[];
+
+export type PreparedQueryOne<Context, Row = unknown> = (
+	context?: Context,
+) => Row | undefined;
 
 type PageParameter<
 	TableSchema extends TableSchemaBase,
@@ -565,17 +557,14 @@ type CompiledQueriesForFindMany<
 	TableSchema extends TableSchemaBase,
 	Cursor extends PrimaryKeyRecord<TableSchema>,
 > = {
-	loadFirst: PreparedStatement<
+	loadFirst: PreparedQueryAll<
 		PageParameter<TableSchema, Cursor, false>,
 		Cursor
 	>;
-	loadLast: PreparedStatement<
-		PageParameter<TableSchema, Cursor, false>,
-		Cursor
-	>;
-	loadNext: PreparedStatement<PageParameter<TableSchema, Cursor, true>, Cursor>;
-	loadPrev: PreparedStatement<PageParameter<TableSchema, Cursor, true>, Cursor>;
-	countTotal: PreparedStatement<never, { "COUNT(*)": number }>;
-	countAfter: PreparedStatement<{ after: Cursor }, { "COUNT(*)": number }>;
-	countBefore: PreparedStatement<{ before: Cursor }, { "COUNT(*)": number }>;
+	loadLast: PreparedQueryAll<PageParameter<TableSchema, Cursor, false>, Cursor>;
+	loadNext: PreparedQueryAll<PageParameter<TableSchema, Cursor, true>, Cursor>;
+	loadPrev: PreparedQueryAll<PageParameter<TableSchema, Cursor, true>, Cursor>;
+	countTotal: PreparedQueryOne<never, { "COUNT(*)": number }>;
+	countAfter: PreparedQueryOne<{ after: Cursor }, { "COUNT(*)": number }>;
+	countBefore: PreparedQueryOne<{ before: Cursor }, { "COUNT(*)": number }>;
 };
