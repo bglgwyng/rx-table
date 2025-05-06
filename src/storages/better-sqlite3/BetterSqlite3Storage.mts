@@ -106,7 +106,7 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 			columns
 				.filter((col) => !this.primaryKeys.includes(col as string))
 				.map((col) => [col, mkParameter((row: Row<Table>) => row[col])]),
-		) as Record<string, ParameterExpression>;
+		) as Record<keyof Partial<Row<Table>>, ParameterExpression>;
 		const insertAst: Insert<Table> = mkInsert(this.schema, values, {
 			onConflict: {
 				columns: this.primaryKeys.map((pk) => pk.toString()),

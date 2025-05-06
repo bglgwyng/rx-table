@@ -23,7 +23,7 @@ export type Insert<Table extends TableSchemaBase = TableSchemaBase> = {
 		columns: (keyof Row<Table>)[];
 		do: {
 			kind: "update";
-			set: Record<keyof Row<Table>, Parameterizable>;
+			set: Partial<Record<keyof Row<Table>, Parameterizable>>;
 		};
 	};
 };
