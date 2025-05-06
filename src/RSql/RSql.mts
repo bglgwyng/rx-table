@@ -1,7 +1,7 @@
-import type { TableSchemaBase, Row } from "../types/TableSchema.mjs";
-import type { Parameterizable, SqlExpression } from "./SqlExpression.mjs";
+import type { Row, TableSchemaBase } from "../types/TableSchema.mjs";
+import type { Expression, Parameterizable } from "./Expression.mjs";
 
-export type SqlOrderBy = {
+export type OrderBy = {
 	column: string;
 	direction: "asc" | "desc";
 };
@@ -9,9 +9,9 @@ export type SqlOrderBy = {
 export type Select<Table extends TableSchemaBase = TableSchemaBase> = {
 	kind: "select";
 	table: string;
-	columns: "*" | SqlExpression<Table>[];
-	where?: SqlExpression<Table>;
-	orderBy?: SqlOrderBy[];
+	columns: "*" | Expression<Table>[];
+	where?: Expression<Table>;
+	orderBy?: OrderBy[];
 	limit?: Parameterizable;
 };
 
@@ -32,19 +32,17 @@ export type Update<Table extends TableSchemaBase = TableSchemaBase> = {
 	kind: "update";
 	table: string;
 	set: Record<keyof Row<Table>, Parameterizable>;
-	where?: SqlExpression<Table>;
+	where?: Expression<Table>;
 };
 
 export type Delete<Table extends TableSchemaBase = TableSchemaBase> = {
 	kind: "delete";
 	table: string;
-	where?: SqlExpression<Table>;
+	where?: Expression<Table>;
 };
 
-export type Source<Table extends TableSchemaBase = TableSchemaBase> =
+export type Statement<Table extends TableSchemaBase = TableSchemaBase> =
 	| Select<Table>
 	| Insert<Table>
 	| Update<Table>
 	| Delete<Table>;
-
-// update/delete 등도 추가됨

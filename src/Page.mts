@@ -1,9 +1,9 @@
-import type { SqlExpression } from "./sql/SqlExpression.mjs";
+import type { Expression } from "./RSql/Expression.mjs";
 import type {
-	TableSchemaBase,
+	ColumnName,
 	PrimaryKeyRecord,
 	Row,
-	ColumnName,
+	TableSchemaBase,
 } from "./types/TableSchema.mjs";
 
 export type PageDelta<T extends TableSchemaBase> = (
@@ -60,7 +60,7 @@ export type PageInit<
 		column: string & keyof Cursor;
 		direction: Direction;
 	}[];
-	filter?: SqlExpression<TableSchema, unknown>;
+	filter?: Expression<TableSchema, unknown>;
 };
 
 export type PageEvent = {

@@ -1,6 +1,6 @@
 import type { Observable } from "rxjs";
+import type { Page, PageDelta, PageEvent, PageInit } from "../Page.mjs";
 import type { Dynamic } from "../core/Dynamic.mjs";
-import type { PageInit, Page, PageDelta, PageEvent } from "../Page.mjs";
 
 export interface TableSchemaBase {
 	name: string;

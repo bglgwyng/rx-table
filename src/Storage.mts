@@ -1,5 +1,5 @@
 import type { Page, PageInit } from "./Page.mjs";
-import type { Delete, Insert, Select, Update } from "./sql/Sql.mjs";
+import type { Delete, Insert, Select, Update } from "./RSql/RSql.mjs";
 import type {
 	PrimaryKey,
 	PrimaryKeyRecord,

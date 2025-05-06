@@ -1,16 +1,11 @@
 import type {
-	ParameterExpression,
-	Parameterizable,
-	SqlExpression,
-} from "./SqlExpression.mjs";
-import type {
-	TableSchemaBase,
-	PrimaryKeyRecord,
 	PrimaryKey,
+	PrimaryKeyRecord,
 	Row,
+	TableSchemaBase,
 } from "../types/TableSchema.mjs";
-import type { Delete, Insert, Select, SqlOrderBy, Update } from "./Sql.mjs";
-import type { Table } from "../Table.mjs";
+import type { Expression, Parameter, Parameterizable } from "./Expression.mjs";
+import type { Delete, Insert, OrderBy, Select, Update } from "./RSql.mjs";
 
 export function mkInsert<Table extends TableSchemaBase>(
 	table: Table,
@@ -36,7 +31,7 @@ export function mkInsert<Table extends TableSchemaBase>(
 export function mkUpdate<Table extends TableSchemaBase>(
 	table: Table,
 	set: Record<keyof Row<Table>, Parameterizable>,
-	where: SqlExpression<Table>,
+	where: Expression<Table>,
 ): Update<Table> {
 	return {
 		kind: "update",
@@ -48,7 +43,7 @@ export function mkUpdate<Table extends TableSchemaBase>(
 
 export function mkDelete<Table extends TableSchemaBase>(
 	table: Table,
-	where: SqlExpression<Table>,
+	where: Expression<Table>,
 ): Delete<Table> {
 	return {
 		kind: "delete",
@@ -59,10 +54,10 @@ export function mkDelete<Table extends TableSchemaBase>(
 
 export function mkSelect<Table extends TableSchemaBase>(
 	table: Table,
-	columns: "*" | SqlExpression<Table>[],
+	columns: "*" | Expression<Table>[],
 	options?: {
-		where?: SqlExpression<Table>;
-		orderBy?: SqlOrderBy[];
+		where?: Expression<Table>;
+		orderBy?: OrderBy[];
 		limit?: Parameterizable;
 	},
 ): Select<TableSchemaBase> {
@@ -74,7 +69,7 @@ export function mkSelect<Table extends TableSchemaBase>(
 	};
 }
 
-export function mkColumn(column: string): SqlExpression<TableSchemaBase> {
+export function mkColumn(column: string): Expression<TableSchemaBase> {
 	return {
 		kind: "column",
 		name: column,
@@ -82,9 +77,9 @@ export function mkColumn(column: string): SqlExpression<TableSchemaBase> {
 }
 
 export function mkEq(
-	left: SqlExpression<TableSchemaBase>,
-	right: SqlExpression<TableSchemaBase>,
-): SqlExpression<TableSchemaBase> {
+	left: Expression<TableSchemaBase>,
+	right: Expression<TableSchemaBase>,
+): Expression<TableSchemaBase> {
 	return {
 		kind: "binOp",
 		operator: "=",
@@ -94,9 +89,9 @@ export function mkEq(
 }
 
 export function mkLT(
-	left: SqlExpression<TableSchemaBase>,
-	right: SqlExpression<TableSchemaBase>,
-): SqlExpression<TableSchemaBase> {
+	left: Expression<TableSchemaBase>,
+	right: Expression<TableSchemaBase>,
+): Expression<TableSchemaBase> {
 	return {
 		kind: "binOp",
 		operator: "<",
@@ -105,9 +100,9 @@ export function mkLT(
 	};
 }
 export function mkLTE(
-	left: SqlExpression<TableSchemaBase>,
-	right: SqlExpression<TableSchemaBase>,
-): SqlExpression<TableSchemaBase> {
+	left: Expression<TableSchemaBase>,
+	right: Expression<TableSchemaBase>,
+): Expression<TableSchemaBase> {
 	return {
 		kind: "binOp",
 		operator: "<=",
@@ -116,9 +111,9 @@ export function mkLTE(
 	};
 }
 export function mkGT(
-	left: SqlExpression<TableSchemaBase>,
-	right: SqlExpression<TableSchemaBase>,
-): SqlExpression<TableSchemaBase> {
+	left: Expression<TableSchemaBase>,
+	right: Expression<TableSchemaBase>,
+): Expression<TableSchemaBase> {
 	return {
 		kind: "binOp",
 		operator: ">",
@@ -127,9 +122,9 @@ export function mkGT(
 	};
 }
 export function mkGTE(
-	left: SqlExpression<TableSchemaBase>,
-	right: SqlExpression<TableSchemaBase>,
-): SqlExpression<TableSchemaBase> {
+	left: Expression<TableSchemaBase>,
+	right: Expression<TableSchemaBase>,
+): Expression<TableSchemaBase> {
 	return {
 		kind: "binOp",
 		operator: ">=",
@@ -140,7 +135,7 @@ export function mkGTE(
 
 export function mkParameter<Context>(
 	getValue: (ctx: Context) => unknown,
-): ParameterExpression {
+): Parameter {
 	return {
 		kind: "parameter",
 		getValue,
@@ -148,8 +143,8 @@ export function mkParameter<Context>(
 }
 
 export function mkTuple<Table extends TableSchemaBase>(
-	expressions: SqlExpression<Table>[],
-): SqlExpression<Table> {
+	expressions: Expression<Table>[],
+): Expression<Table> {
 	return {
 		kind: "tuple",
 		expressions,
@@ -158,7 +153,7 @@ export function mkTuple<Table extends TableSchemaBase>(
 
 export function mkPkColumns<Table extends TableSchemaBase>(
 	table: Table,
-): SqlExpression<Table> {
+): Expression<Table> {
 	return {
 		kind: "tuple",
 		expressions: table.primaryKey.map((pk) => ({ kind: "column", name: pk })),
@@ -167,7 +162,7 @@ export function mkPkColumns<Table extends TableSchemaBase>(
 export function mkPkParams<Table extends TableSchemaBase, Context>(
 	table: Table,
 	getValue: (ctx: Context) => PrimaryKeyRecord<Table>,
-): SqlExpression<Table> {
+): Expression<Table> {
 	return {
 		kind: "tuple",
 		expressions: table.primaryKey.map((pk) => ({

@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
 import { TestScheduler } from "rxjs/testing";
+import { describe, expect, it } from "vitest";
 import { mergeWithKey } from "./mergeWithKey.mjs";
 
 describe("mergeWithKey", () => {

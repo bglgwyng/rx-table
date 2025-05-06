@@ -1,12 +1,12 @@
-import type { SqlExpression } from "../sql/SqlExpression.mjs";
+import type { Expression } from "../RSql/Expression.mjs";
 import type { Row } from "../types/TableSchema.mjs";
 import type { TableSchemaBase } from "../types/TableSchema.mjs";
 
-export function sqlExpressionToFilterFn<T extends TableSchemaBase>(
-	condition: SqlExpression<T>,
+export function rsqlExpressionToFilterFn<T extends TableSchemaBase>(
+	condition: Expression<T>,
 ): (value: Row<T>) => boolean {
 	// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-	function evalExpr(expr: SqlExpression<T>, row: Row<T>): any {
+	function evalExpr(expr: Expression<T>, row: Row<T>): any {
 		switch (expr.kind) {
 			case "column":
 				return row[expr.name];

@@ -1,4 +1,4 @@
-import { merge, type Observable } from "rxjs";
+import { type Observable, merge } from "rxjs";
 import { map, scan } from "rxjs/operators";
 
 /**

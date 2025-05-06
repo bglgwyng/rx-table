@@ -1,34 +1,30 @@
+import assert from "assert";
 import type { Database, Statement } from "better-sqlite3";
-import type {
-	Mutation,
-	PreparedMutation,
-	PreparedQuery,
-	ReadableStorage,
-	WritableStorage,
-} from "../../Storage.mjs";
 import {
-	invertDirection,
 	type BackwardPageInit,
 	type ForwardPageInit,
 	type Page,
 	type PageInit,
+	invertDirection,
 } from "../../Page.mjs";
-import type {
-	ColumnName,
-	PrimaryKey,
-	PrimaryKeyRecord,
-	Row,
-} from "../../types/TableSchema.mjs";
-import type { TableSchemaBase } from "../../types/TableSchema.mjs";
-import { compileSql, type CompiledQuery } from "../../sql/compileSql.mjs";
-import type { Delete, Insert, Select, Update } from "../../sql/Sql.mjs";
 import {
-	ands,
-	type ParameterExpression,
+	type Expression,
+	type Parameter,
 	type Parameterizable,
-	type SqlExpression,
-	type TupleExpression,
-} from "../../sql/SqlExpression.mjs";
+	type Tuple,
+	ands,
+} from "../../RSql/Expression.mjs";
+import type { Delete, Insert, Select, Update } from "../../RSql/RSql.mjs";
+import {
+	type CompiledQuery,
+	compileStatementToSql,
+} from "../../RSql/compileToSql.mjs";
+import {
+	mkDeleteRow,
+	mkFindUnique,
+	mkInsertRow,
+	mkUpsertRow,
+} from "../../RSql/mkHelpers.mjs";
 import {
 	mkColumn,
 	mkDelete,
@@ -42,14 +38,21 @@ import {
 	mkSelect,
 	mkTuple,
 	mkUpdate,
-} from "../../sql/mks.mjs";
-import assert from "assert";
-import {
-	mkDeleteRow,
-	mkFindUnique,
-	mkInsertRow,
-	mkUpsertRow,
-} from "../../sql/mkHelpers.mjs";
+} from "../../RSql/mks.mjs";
+import type {
+	Mutation,
+	PreparedMutation,
+	PreparedQuery,
+	ReadableStorage,
+	WritableStorage,
+} from "../../Storage.mjs";
+import type {
+	ColumnName,
+	PrimaryKey,
+	PrimaryKeyRecord,
+	Row,
+} from "../../types/TableSchema.mjs";
+import type { TableSchemaBase } from "../../types/TableSchema.mjs";
 
 export class BetterSqlite3Storage<Table extends TableSchemaBase>
 	implements WritableStorage<Table>, ReadableStorage<Table>
@@ -75,7 +78,7 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 	prepareQuery<Row, Context>(
 		query: Select<Table>,
 	): PreparedQuery<Row, Context> {
-		const [sql, getParams] = compileSql(query);
+		const [sql, getParams] = compileStatementToSql(query);
 		const stmt = this.database.prepare(sql);
 		return (context: Context) => stmt.all(...getParams(context)) as Row[];
 	}
@@ -83,7 +86,7 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 	prepareMutation<Context>(
 		mutation: Insert<Table> | Update<Table> | Delete<Table>,
 	): PreparedMutation<Context> {
-		const [sql, getParams] = compileSql(mutation);
+		const [sql, getParams] = compileStatementToSql(mutation);
 		const stmt = this.database.prepare(sql);
 
 		return (context: Context) => {
@@ -140,18 +143,18 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 					}) => ctx.changes[col],
 				),
 			]),
-		) as Record<keyof Row<Table>, ParameterExpression>;
+		) as Record<keyof Row<Table>, Parameter>;
 
 		const pkColumns = mkPkColumns(this.schema);
 		const pkParams = mkPkParams(
 			this.schema,
 			({ key }: { key: PrimaryKeyRecord<Table> }) => key,
 		);
-		const where: SqlExpression<Table> = mkEq(pkColumns, pkParams);
+		const where: Expression<Table> = mkEq(pkColumns, pkParams);
 
 		const updateAst: Update<Table> = mkUpdate(this.schema, set, where);
 
-		const [sql, getParamsRaw] = compileSql(updateAst);
+		const [sql, getParamsRaw] = compileStatementToSql(updateAst);
 
 		const stmt = this.database.prepare(sql);
 		stmt.run(...getParamsRaw({ changes, key }));
@@ -247,7 +250,7 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 	}
 
 	prepareFindMany<Cursor extends PrimaryKeyRecord<Table>>(options: {
-		filter?: SqlExpression<Table>;
+		filter?: Expression<Table>;
 		orderBy: readonly {
 			column: PrimaryKey<Table>[number];
 			direction: "asc" | "desc";
@@ -296,7 +299,7 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 	>;
 
 	private compileFindMany<Cursor extends PrimaryKeyRecord<Table>>(pageInput: {
-		filter?: SqlExpression<Table>;
+		filter?: Expression<Table>;
 		orderBy: readonly {
 			column: string & keyof Cursor;
 			direction: "asc" | "desc";
@@ -318,7 +321,7 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 
 		const mkCursorParams = <Context, _ = unknown>(
 			getCursor: (context: Context) => Cursor,
-		): TupleExpression<Table> => ({
+		): Tuple<Table> => ({
 			kind: "tuple",
 			expressions: pageInput.orderBy.map((col) => ({
 				kind: "parameter",
@@ -473,7 +476,7 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 	private prepareQueryAll<Context, Row = unknown>(
 		query: Select<Table>,
 	): PreparedQueryAll<Context, Row> {
-		const [sql, getParams] = compileSql(query);
+		const [sql, getParams] = compileStatementToSql(query);
 		const stmt = this.database.prepare(sql);
 		return (context?: Context) => stmt.all(...getParams(context)) as Row[];
 	}
@@ -481,7 +484,7 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 	private prepareQueryOne<Context, Row = unknown>(
 		query: Select<Table>,
 	): PreparedQueryOne<Context, Row> {
-		const [sql, getParams] = compileSql(query);
+		const [sql, getParams] = compileStatementToSql(query);
 		const stmt = this.database.prepare(sql);
 		return (context?: Context) => stmt.get(...getParams(context)) as Row;
 	}

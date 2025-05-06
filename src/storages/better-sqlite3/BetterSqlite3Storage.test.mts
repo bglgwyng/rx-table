@@ -1,9 +1,9 @@
 import Database from "better-sqlite3";
-import { BetterSqlite3Storage } from "./BetterSqlite3Storage.mjs";
 import {
-	userTableSchema,
 	testStorageImplementation,
+	userTableSchema,
 } from "../testStorageImplementation.mjs";
+import { BetterSqlite3Storage } from "./BetterSqlite3Storage.mjs";
 
 type UserTable = typeof userTableSchema;
 

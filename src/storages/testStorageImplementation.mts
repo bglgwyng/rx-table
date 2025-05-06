@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { Storage } from "../Storage.mjs";
 import type {
-	Row,
 	PrimaryKeyRecord,
+	Row,
 	TableSchemaBase,
 } from "../types/TableSchema.mjs";
 

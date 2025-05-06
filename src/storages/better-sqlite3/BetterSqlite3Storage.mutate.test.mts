@@ -1,8 +1,8 @@
 import Database from "better-sqlite3";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Mutation } from "../../Storage.mjs";
-import { BetterSqlite3Storage } from "./BetterSqlite3Storage.mjs";
 import type { TableSchemaBase } from "../../types/TableSchema.mjs";
+import { BetterSqlite3Storage } from "./BetterSqlite3Storage.mjs";
 
 const userSchema: TableSchemaBase = {
 	name: "users",

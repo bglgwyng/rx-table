@@ -1,4 +1,4 @@
-import type { TableSchemaBase, ColumnName } from "./TableSchema.mjs";
+import type { ColumnName, TableSchemaBase } from "./TableSchema.mjs";
 
 export type LeftJoin<
 	T1 extends TableSchemaBase,

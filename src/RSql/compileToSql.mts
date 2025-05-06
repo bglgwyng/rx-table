@@ -1,25 +1,30 @@
 import assert from "assert";
-import type { TableSchemaBase, Row } from "../types/TableSchema.mjs";
+import type { Row, TableSchemaBase } from "../types/TableSchema.mjs";
 import {
-	isParameterizable,
+	type Expression,
 	type Parameterizable,
-	type SqlExpression,
-} from "./SqlExpression.mjs";
-import type { Source } from "./Sql.mjs";
+	isParameterizable,
+} from "./Expression.mjs";
+import type { Statement } from "./RSql.mjs";
 
-function* renderSqlExpression(
-	expr: SqlExpression<TableSchemaBase>,
+export type CompiledQuery<Context> = readonly [
+	sql: string,
+	getParams: (context?: Context) => unknown[],
+];
+
+function* renderExpressionToSql(
+	expr: Expression<TableSchemaBase>,
 ): Generator<Parameterizable, string> {
 	if (expr.kind === "binOp") {
-		const left = yield* renderSqlExpression(expr.left);
-		const right = yield* renderSqlExpression(expr.right);
+		const left = yield* renderExpressionToSql(expr.left);
+		const right = yield* renderExpressionToSql(expr.right);
 		const op = expr.operator;
 
 		return `(${left} ${op} ${right})`;
 	}
 	if (expr.kind === "unOp") {
 		if (expr.operator === "NOT") {
-			const operand = yield* renderSqlExpression(expr.expression);
+			const operand = yield* renderExpressionToSql(expr.expression);
 			return `(NOT ${operand})`;
 		}
 	}
@@ -33,7 +38,7 @@ function* renderSqlExpression(
 	if (expr.kind === "function") {
 		const args: string[] = [];
 		for (const arg of expr.args) {
-			const argSql = yield* renderSqlExpression(arg);
+			const argSql = yield* renderExpressionToSql(arg);
 
 			args.push(argSql);
 		}
@@ -43,7 +48,7 @@ function* renderSqlExpression(
 	if (expr.kind === "tuple") {
 		const placeholders: string[] = [];
 		for (const elems of expr.expressions) {
-			const placeholder = yield* renderSqlExpression(elems);
+			const placeholder = yield* renderExpressionToSql(elems);
 			placeholders.push(placeholder);
 		}
 		return `(${placeholders.join(", ")})`;
@@ -56,8 +61,8 @@ function* renderSqlExpression(
 	assert.fail("Unsupported expression type in renderExpression");
 }
 
-export function* renderSql<Table extends TableSchemaBase>(
-	sqlAst: Source<Table>,
+export function* renderStatementToSql<Table extends TableSchemaBase>(
+	sqlAst: Statement<Table>,
 ): Generator<Parameterizable, string> {
 	switch (sqlAst.kind) {
 		case "select": {
@@ -67,14 +72,14 @@ export function* renderSql<Table extends TableSchemaBase>(
 			} else {
 				const cols: string[] = [];
 				for (const col of sqlAst.columns) {
-					cols.push(yield* renderSqlExpression(col));
+					cols.push(yield* renderExpressionToSql(col));
 				}
 				selection = cols.join(", ");
 			}
 			let sql = `SELECT ${selection} FROM ${sqlAst.table}`;
 			let paramCount = 0;
 			if (sqlAst.where) {
-				const whereSql = yield* renderSqlExpression(sqlAst.where);
+				const whereSql = yield* renderExpressionToSql(sqlAst.where);
 				sql += ` WHERE ${whereSql}`;
 			}
 			if (sqlAst.orderBy && sqlAst.orderBy.length > 0) {
@@ -127,7 +132,7 @@ export function* renderSql<Table extends TableSchemaBase>(
 				yield sqlAst.set[k as keyof Row<TableSchemaBase>]!;
 			}
 			if (sqlAst.where) {
-				const whereSql = yield* renderSqlExpression(sqlAst.where);
+				const whereSql = yield* renderExpressionToSql(sqlAst.where);
 				sql += ` WHERE ${whereSql}`;
 			}
 			return sql;
@@ -135,7 +140,7 @@ export function* renderSql<Table extends TableSchemaBase>(
 		case "delete": {
 			let sql = `DELETE FROM ${sqlAst.table}`;
 			if (sqlAst.where) {
-				const whereSql = yield* renderSqlExpression(sqlAst.where);
+				const whereSql = yield* renderExpressionToSql(sqlAst.where);
 				sql += ` WHERE ${whereSql}`;
 			}
 			return sql;
@@ -143,10 +148,10 @@ export function* renderSql<Table extends TableSchemaBase>(
 	}
 }
 
-export function compileSqlExpression<
+export function compileExpressionToSql<
 	Table extends TableSchemaBase = TableSchemaBase,
->(expr: SqlExpression<Table>): [sql: string, (context: unknown) => unknown[]] {
-	const gen = renderSqlExpression(expr);
+>(expr: Expression<Table>): [sql: string, (context: unknown) => unknown[]] {
+	const gen = renderExpressionToSql(expr);
 	const params: Parameterizable[] = [];
 	let next = gen.next();
 	while (!next.done) {
@@ -163,15 +168,10 @@ export function compileSqlExpression<
 	];
 }
 
-export type CompiledQuery<Context> = readonly [
-	sql: string,
-	getParams: (context?: Context) => unknown[],
-];
-
-export function compileSql<Table extends TableSchemaBase, Context>(
-	sqlAst: Source<Table>,
+export function compileStatementToSql<Table extends TableSchemaBase, Context>(
+	sqlAst: Statement<Table>,
 ): CompiledQuery<Context> {
-	const gen = renderSql(sqlAst);
+	const gen = renderStatementToSql(sqlAst);
 	const params: Parameterizable[] = [];
 	let next = gen.next();
 	while (!next.done) {

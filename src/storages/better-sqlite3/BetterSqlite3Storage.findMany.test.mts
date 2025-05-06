@@ -1,13 +1,13 @@
-import { describe, it, expect, beforeEach } from "vitest";
 import Database from "better-sqlite3";
-import { BetterSqlite3Storage } from "./BetterSqlite3Storage.mjs";
-import { sqlExpressionToFilterFn } from "../../util/sqlExpressionToFilterFn.mjs";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { Page, PageInit } from "../../Page.mjs";
+import type { Expression } from "../../RSql/Expression.mjs";
+import type { Statement } from "../../RSql/RSql.mjs";
+import { compileStatementToSql } from "../../RSql/compileToSql.mjs";
 import type { Row } from "../../types/TableSchema.mjs";
-import type { SqlExpression } from "../../sql/SqlExpression.mjs";
 import type { TableSchemaBase } from "../../types/TableSchema.mjs";
-import { compileSql } from "../../sql/compileSql.mjs";
-import type { Source } from "../../sql/Sql.mjs";
+import { rsqlExpressionToFilterFn } from "../../util/rsqlExpressionToFilterFn.mjs";
+import { BetterSqlite3Storage } from "./BetterSqlite3Storage.mjs";
 
 const userSchema = {
 	name: "users",
@@ -125,7 +125,7 @@ describe("SqliteStorage.findMany", () => {
 	});
 
 	it("supports filtering and all results satisfy conditionToFilter", () => {
-		const filterExpr: SqlExpression<UserTable> = {
+		const filterExpr: Expression<UserTable> = {
 			kind: "binOp",
 			operator: "=",
 			left: { kind: "column", name: "age" },
@@ -145,7 +145,7 @@ describe("SqliteStorage.findMany", () => {
 		expect(page.endCursor).toEqual({ id: 5 });
 
 		// Validate all returned rows satisfy the filter
-		const filterFn = sqlExpressionToFilterFn(filterExpr);
+		const filterFn = rsqlExpressionToFilterFn(filterExpr);
 		for (const pk of page.rows) {
 			const row = storage.findUnique(pk) as Row<UserTable>;
 			expect(filterFn(row)).toBe(true);
@@ -167,7 +167,7 @@ describe("SqliteStorage.findMany", () => {
 	});
 
 	it("should render tuple of constants and parameters", () => {
-		const expr: Source = {
+		const expr: Statement = {
 			kind: "select",
 			table: "users",
 			columns: "*",
@@ -180,7 +180,7 @@ describe("SqliteStorage.findMany", () => {
 				],
 			},
 		};
-		const [sql, getParams] = compileSql(expr);
+		const [sql, getParams] = compileStatementToSql(expr);
 		const params = getParams({ name: "hello" });
 		expect(sql).toBe("SELECT * FROM users WHERE (?, ?, ?)");
 		expect(params.length).toBe(3);

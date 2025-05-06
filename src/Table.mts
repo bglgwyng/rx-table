@@ -12,9 +12,20 @@ import {
 	tap,
 	timer,
 } from "rxjs";
+import type { Page, PageDelta, PageEvent, PageInit } from "./Page.mjs";
+import type { Parameter } from "./RSql/Expression.mjs";
+import {
+	mkDelete,
+	mkEq,
+	mkInsert,
+	mkParameter,
+	mkPkColumns,
+	mkPkParams,
+	mkUpdate,
+} from "./RSql/mks.mjs";
 import type { PreparedMutation, PreparedQuery, Storage } from "./Storage.mjs";
 import { type Dynamic, createDynamic } from "./core/Dynamic.mjs";
-import type { Page, PageDelta, PageEvent, PageInit } from "./Page.mjs";
+import type { PreparedQueryOne } from "./storages/better-sqlite3/BetterSqlite3Storage.mjs";
 import type {
 	ReadableTable,
 	TableEvent,
@@ -28,18 +39,7 @@ import type {
 } from "./types/TableSchema.mjs";
 import type { TableSchemaBase } from "./types/TableSchema.mjs";
 import { partitionByKey } from "./util/partitionByKey.mjs";
-import { sqlExpressionToFilterFn } from "./util/sqlExpressionToFilterFn.mjs";
-import {
-	mkDelete,
-	mkEq,
-	mkInsert,
-	mkParameter,
-	mkPkColumns,
-	mkPkParams,
-	mkUpdate,
-} from "./sql/mks.mjs";
-import type { PreparedQueryOne } from "./storages/better-sqlite3/BetterSqlite3Storage.mjs";
-import type { ParameterExpression } from "./sql/SqlExpression.mjs";
+import { rsqlExpressionToFilterFn } from "./util/rsqlExpressionToFilterFn.mjs";
 
 export class Table<T extends TableSchemaBase>
 	implements ReadableTable<T>, WritableTable<T>
@@ -61,7 +61,7 @@ export class Table<T extends TableSchemaBase>
 								mkParameter((row: Row<T>) => row[col as keyof Row<T>]),
 							] as const,
 					),
-				) as Record<keyof Row<T>, ParameterExpression>,
+				) as Record<keyof Row<T>, Parameter>,
 			),
 		);
 		this.preparedDeleteRow = this.storage.prepareMutation<PrimaryKeyRecord<T>>(
@@ -100,7 +100,7 @@ export class Table<T extends TableSchemaBase>
 								),
 							] as const,
 					),
-				) as Record<keyof Row<T>, ParameterExpression>,
+				) as Record<keyof Row<T>, Parameter>,
 				mkEq(
 					mkPkColumns(this.tableSchema),
 					mkPkParams<T, Context>(this.tableSchema, (ctx: Context) => ctx.key),
@@ -161,7 +161,7 @@ export class Table<T extends TableSchemaBase>
 	): Dynamic<Page<T, Cursor>, PageDelta<T>> {
 		const page = this.storage.findMany(pageInput);
 		const filter = pageInput.filter
-			? sqlExpressionToFilterFn(pageInput.filter)
+			? rsqlExpressionToFilterFn(pageInput.filter)
 			: () => true;
 
 		return createDynamic<Page<T, Cursor>, PageDelta<T>>(
