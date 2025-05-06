@@ -1,24 +1,22 @@
 import assert from "assert";
-import type { Database, Statement } from "better-sqlite3";
+import type { Database } from "better-sqlite3";
 import {
 	type BackwardPageInit,
 	type ForwardPageInit,
 	type Page,
 	type PageInit,
+	type PageParameter,
+	type PreparedQueriesForFindMany,
 	invertDirection,
 } from "../../Page.mjs";
 import {
 	type Expression,
 	type Parameter,
-	type Parameterizable,
 	type Tuple,
 	ands,
 } from "../../RSql/Expression.mjs";
 import type { Delete, Insert, Select, Update } from "../../RSql/RSql.mjs";
-import {
-	type CompiledQuery,
-	compileStatementToSql,
-} from "../../RSql/compileToSql.mjs";
+import { compileStatementToSql } from "../../RSql/compileToSql.mjs";
 import {
 	mkDeleteRow,
 	mkFindUnique,
@@ -27,10 +25,8 @@ import {
 } from "../../RSql/mkHelpers.mjs";
 import {
 	mkColumn,
-	mkDelete,
 	mkEq,
 	mkGT,
-	mkInsert,
 	mkLT,
 	mkParameter,
 	mkPkColumns,
@@ -41,18 +37,20 @@ import {
 } from "../../RSql/mks.mjs";
 import type {
 	Mutation,
-	PreparedMutation,
-	PreparedQuery,
 	ReadableStorage,
 	WritableStorage,
 } from "../../Storage.mjs";
 import type {
-	ColumnName,
 	PrimaryKey,
 	PrimaryKeyRecord,
 	Row,
 } from "../../types/TableSchema.mjs";
 import type { TableSchemaBase } from "../../types/TableSchema.mjs";
+import type {
+	PreparedMutation,
+	PreparedQueryAll,
+	PreparedQueryOne,
+} from "../../types/PreparedStatement.mjs";
 
 export class BetterSqlite3Storage<Table extends TableSchemaBase>
 	implements WritableStorage<Table>, ReadableStorage<Table>
@@ -75,12 +73,21 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 		return this.schema.primaryKey;
 	}
 
-	prepareQuery<Row, Context>(
+	prepareQueryOne<Context, Row>(
 		query: Select<Table>,
-	): PreparedQuery<Row, Context> {
+	): PreparedQueryOne<Context, Row> {
 		const [sql, getParams] = compileStatementToSql(query);
 		const stmt = this.database.prepare(sql);
-		return (context: Context) => stmt.all(...getParams(context)) as Row[];
+		return (context?: Context) =>
+			(stmt.get(...getParams(context)) as Row | undefined) ?? null;
+	}
+
+	prepareQueryAll<Context, Row>(
+		query: Select<Table>,
+	): PreparedQueryAll<Context, Row> {
+		const [sql, getParams] = compileStatementToSql(query);
+		const stmt = this.database.prepare(sql);
+		return (context?: Context) => stmt.all(...getParams(context)) as Row[];
 	}
 
 	prepareMutation<Context>(
@@ -89,9 +96,7 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 		const [sql, getParams] = compileStatementToSql(mutation);
 		const stmt = this.database.prepare(sql);
 
-		return (context: Context) => {
-			return stmt.run(...getParams(context));
-		};
+		return (context?: Context) => stmt.run(...getParams(context));
 	}
 
 	mutate(mutation: Mutation<Table>): void {
@@ -304,7 +309,7 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 			column: string & keyof Cursor;
 			direction: "asc" | "desc";
 		}[];
-	}): CompiledQueriesForFindMany<Table, Cursor> {
+	}): PreparedQueriesForFindMany<Table, Cursor> {
 		assert(
 			this.schema.primaryKey.every((pk) =>
 				pageInput.orderBy.some((o) => o.column === pk),
@@ -463,66 +468,4 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 			countBefore: this.prepareQueryOne(countBeforeAst),
 		};
 	}
-
-	private prepareStatement<Context, Row = unknown>([
-		sql,
-		getParams,
-	]: CompiledQuery<Context>): PreparedStatement<Context, Row> {
-		return {
-			statement: this.database.prepare(sql),
-			getParams: getParams as (context?: Context) => Row[],
-		};
-	}
-	private prepareQueryAll<Context, Row = unknown>(
-		query: Select<Table>,
-	): PreparedQueryAll<Context, Row> {
-		const [sql, getParams] = compileStatementToSql(query);
-		const stmt = this.database.prepare(sql);
-		return (context?: Context) => stmt.all(...getParams(context)) as Row[];
-	}
-
-	private prepareQueryOne<Context, Row = unknown>(
-		query: Select<Table>,
-	): PreparedQueryOne<Context, Row> {
-		const [sql, getParams] = compileStatementToSql(query);
-		const stmt = this.database.prepare(sql);
-		return (context?: Context) => stmt.get(...getParams(context)) as Row;
-	}
 }
-
-export type PreparedStatement<Context, Row = unknown> = {
-	statement: Statement;
-	getParams: (context?: Context) => Row[];
-};
-
-export type PreparedQueryAll<Context, Row = unknown> = (
-	context?: Context,
-) => Row[];
-
-export type PreparedQueryOne<Context, Row = unknown> = (
-	context?: Context,
-) => Row | undefined;
-
-type PageParameter<
-	TableSchema extends TableSchemaBase,
-	Cursor extends PrimaryKeyRecord<TableSchema>,
-	HasCursor extends boolean,
-> = {
-	limit: number;
-} & (HasCursor extends true ? { cursor: Cursor } : Record<string, unknown>);
-
-type CompiledQueriesForFindMany<
-	TableSchema extends TableSchemaBase,
-	Cursor extends PrimaryKeyRecord<TableSchema>,
-> = {
-	loadFirst: PreparedQueryAll<
-		PageParameter<TableSchema, Cursor, false>,
-		Cursor
-	>;
-	loadLast: PreparedQueryAll<PageParameter<TableSchema, Cursor, false>, Cursor>;
-	loadNext: PreparedQueryAll<PageParameter<TableSchema, Cursor, true>, Cursor>;
-	loadPrev: PreparedQueryAll<PageParameter<TableSchema, Cursor, true>, Cursor>;
-	countTotal: PreparedQueryOne<never, { "COUNT(*)": number }>;
-	countAfter: PreparedQueryOne<{ after: Cursor }, { "COUNT(*)": number }>;
-	countBefore: PreparedQueryOne<{ before: Cursor }, { "COUNT(*)": number }>;
-};

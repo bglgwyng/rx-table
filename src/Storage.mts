@@ -1,6 +1,11 @@
 import type { Page, PageInit } from "./Page.mjs";
 import type { Delete, Insert, Select, Update } from "./RSql/RSql.mjs";
 import type {
+	PreparedMutation,
+	PreparedQueryAll,
+	PreparedQueryOne,
+} from "./types/PreparedStatement.mjs";
+import type {
 	PrimaryKey,
 	PrimaryKeyRecord,
 	Row,
@@ -14,7 +19,12 @@ export type Storage<T extends TableSchemaBase> = ReadableStorage<T> &
 	};
 
 export type ReadableStorage<T extends TableSchemaBase> = {
-	prepareQuery<Row, Context>(query: Select<T>): PreparedQuery<Row, Context>;
+	prepareQueryOne<Context, Row>(
+		query: Select<T>,
+	): PreparedQueryOne<Context, Row>;
+	prepareQueryAll<Context, Row>(
+		query: Select<T>,
+	): PreparedQueryAll<Context, Row>;
 
 	findUnique(key: PrimaryKeyRecord<T>): Row<T> | null;
 	findMany<Cursor extends PrimaryKeyRecord<T>>(
@@ -35,10 +45,6 @@ export type WritableStorage<T extends TableSchemaBase> = {
 	): void;
 	delete(key: PrimaryKeyRecord<T>): void;
 };
-
-export type PreparedQuery<Row, Context> = (context: Context) => Row[];
-
-export type PreparedMutation<Context> = (context: Context) => void;
 
 export interface TransactionalStorage<T extends TableSchemaBase> {
 	/**

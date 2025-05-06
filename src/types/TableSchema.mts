@@ -37,6 +37,13 @@ export type PrimaryKeyTuple<T extends TableSchemaBase> =
 		: never;
 
 export type ReadableTable<T extends TableSchemaBase> = {
+	// prepareQueryOne<Context, Row>(
+	// 	rsql: Select<T>,
+	// ): PreparedQueryOne<Context, Row>;
+	// prepareQueryAll<Context, Row>(
+	// 	rsql: Select<T>,
+	// ): PreparedQueryAll<Context, Row>;
+
 	findUnique(key: PrimaryKeyRecord<T>): Dynamic<Row<T> | null, void>;
 	findMany<Cursor extends PrimaryKeyRecord<T>>(
 		pageInput: PageInit<T, Cursor>,

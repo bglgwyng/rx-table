@@ -1,5 +1,9 @@
 import type { Expression } from "./RSql/Expression.mjs";
 import type {
+	PreparedQueryAll,
+	PreparedQueryOne,
+} from "./types/PreparedStatement.mjs";
+import type {
 	ColumnName,
 	PrimaryKeyRecord,
 	Row,
@@ -78,3 +82,25 @@ export type Direction = "asc" | "desc";
 export function invertDirection(dir: Direction): Direction {
 	return dir === "asc" ? "desc" : "asc";
 }
+export type PageParameter<
+	TableSchema extends TableSchemaBase,
+	Cursor extends PrimaryKeyRecord<TableSchema>,
+	HasCursor extends boolean,
+> = {
+	limit: number;
+} & (HasCursor extends true ? { cursor: Cursor } : Record<string, unknown>);
+export type PreparedQueriesForFindMany<
+	TableSchema extends TableSchemaBase,
+	Cursor extends PrimaryKeyRecord<TableSchema>,
+> = {
+	loadFirst: PreparedQueryAll<
+		PageParameter<TableSchema, Cursor, false>,
+		Cursor
+	>;
+	loadLast: PreparedQueryAll<PageParameter<TableSchema, Cursor, false>, Cursor>;
+	loadNext: PreparedQueryAll<PageParameter<TableSchema, Cursor, true>, Cursor>;
+	loadPrev: PreparedQueryAll<PageParameter<TableSchema, Cursor, true>, Cursor>;
+	countTotal: PreparedQueryOne<never, { "COUNT(*)": number }>;
+	countAfter: PreparedQueryOne<{ after: Cursor }, { "COUNT(*)": number }>;
+	countBefore: PreparedQueryOne<{ before: Cursor }, { "COUNT(*)": number }>;
+};
