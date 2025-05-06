@@ -37,7 +37,6 @@ function* renderSqlExpression(
 
 			args.push(argSql);
 		}
-		console.info(expr.name, expr.args, { args });
 		return `${expr.name}(${args.join(", ")})`;
 	}
 

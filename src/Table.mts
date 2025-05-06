@@ -12,7 +12,7 @@ import {
 	tap,
 	timer,
 } from "rxjs";
-import type { Storage } from "./Storage.mjs";
+import type { PreparedMutation, PreparedQuery, Storage } from "./Storage.mjs";
 import { type Dynamic, createDynamic } from "./core/Dynamic.mjs";
 import type { Page, PageDelta, PageEvent, PageInit } from "./Page.mjs";
 import type {
@@ -29,6 +29,17 @@ import type {
 import type { TableSchemaBase } from "./types/TableSchema.mjs";
 import { partitionByKey } from "./util/partitionByKey.mjs";
 import { sqlExpressionToFilterFn } from "./util/sqlExpressionToFilterFn.mjs";
+import {
+	mkDelete,
+	mkEq,
+	mkInsert,
+	mkParameter,
+	mkPkColumns,
+	mkPkParams,
+	mkUpdate,
+} from "./sql/mks.mjs";
+import type { PreparedQueryOne } from "./storages/better-sqlite3/BetterSqlite3Storage.mjs";
+import type { ParameterExpression } from "./sql/SqlExpression.mjs";
 
 export class Table<T extends TableSchemaBase>
 	implements ReadableTable<T>, WritableTable<T>
@@ -38,9 +49,31 @@ export class Table<T extends TableSchemaBase>
 		storage: Storage<T>,
 	) {
 		this.storage = storage;
+
+		this.preparedInsertRow = this.storage.prepareMutation<Row<T>>(
+			mkInsert(
+				this.tableSchema,
+				Object.fromEntries(
+					Object.entries(this.tableSchema.columns).map(
+						([col]) =>
+							[
+								col,
+								mkParameter((row: Row<T>) => row[col as keyof Row<T>]),
+							] as const,
+					),
+				) as Record<keyof Row<T>, ParameterExpression>,
+			),
+		);
+		this.preparedDeleteRow = this.storage.prepareMutation<PrimaryKeyRecord<T>>(
+			mkDelete(this.tableSchema, mkPkColumns(this.tableSchema)),
+		);
 	}
+
+	private preparedInsertRow: PreparedMutation<Row<T>>;
+	private preparedDeleteRow: PreparedMutation<PrimaryKeyRecord<T>>;
+
 	insert(row: Row<T>): void {
-		this.storage.insert(row);
+		this.preparedInsertRow(row);
 		this.events.next([{ kind: "insert", row }]);
 	}
 	upsert(row: Row<T>): void {
@@ -48,13 +81,37 @@ export class Table<T extends TableSchemaBase>
 	}
 	update(
 		key: PrimaryKeyRecord<T>,
-		partialRow: Partial<Omit<Row<T>, PrimaryKey<T>[number]>>,
+		changes: Partial<Omit<Row<T>, PrimaryKey<T>[number]>>,
 	): void {
-		this.storage.update(key, partialRow);
-		this.events.next([{ kind: "update", key, row: partialRow }]);
+		type Context = {
+			key: PrimaryKeyRecord<T>;
+			changes: Partial<Omit<Row<T>, PrimaryKey<T>[number]>>;
+		};
+		const preparedUpdateRow = this.storage.prepareMutation<Context>(
+			mkUpdate(
+				this.tableSchema,
+				Object.fromEntries(
+					Object.entries(changes).map(
+						([col]) =>
+							[
+								col,
+								mkParameter(
+									(ctx: Context) => ctx.changes[col as keyof typeof changes],
+								),
+							] as const,
+					),
+				) as Record<keyof Row<T>, ParameterExpression>,
+				mkEq(
+					mkPkColumns(this.tableSchema),
+					mkPkParams<T, Context>(this.tableSchema, (ctx: Context) => ctx.key),
+				),
+			),
+		);
+		preparedUpdateRow({ key, changes: changes });
+		this.events.next([{ kind: "update", key, row: changes }]);
 	}
 	delete(key: PrimaryKeyRecord<T>): void {
-		this.storage.delete(key);
+		this.preparedDeleteRow(key);
 		this.events.next([{ kind: "delete", key }]);
 	}
 

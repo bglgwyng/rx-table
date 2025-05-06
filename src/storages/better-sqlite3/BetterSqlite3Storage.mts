@@ -1,6 +1,8 @@
 import type { Database, Statement } from "better-sqlite3";
 import type {
 	Mutation,
+	PreparedMutation,
+	PreparedQuery,
 	ReadableStorage,
 	WritableStorage,
 } from "../../Storage.mjs";
@@ -59,6 +61,25 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 		return this.schema.primaryKey;
 	}
 
+	prepareQuery<Row, Context>(
+		query: Select<Table>,
+	): PreparedQuery<Row, Context> {
+		const [sql, getParams] = compileSql(query);
+		const stmt = this.database.prepare(sql);
+		return (context: Context) => stmt.all(...getParams(context)) as Row[];
+	}
+
+	prepareMutation<Context>(
+		mutation: Insert<Table> | Update<Table> | Delete<Table>,
+	): PreparedMutation<Context> {
+		const [sql, getParams] = compileSql(mutation);
+		const stmt = this.database.prepare(sql);
+
+		return (context: Context) => {
+			return stmt.run(...getParams(context));
+		};
+	}
+
 	mutate(mutation: Mutation<Table>): void {
 		switch (mutation.type) {
 			case "insert":
@@ -90,35 +111,15 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 	 * Insert a new row into the table
 	 */
 	insert(row: Row<Table>): void {
-		const { statement, getParams } = this.compiledInsert;
-		statement.run(...getParams(row));
+		this.preparedInsertRow(row);
 	}
 
 	/**
 	 * Insert a row or update it if it already exists (based on primary key)
 	 */
+
 	upsert(row: Row<Table>): void {
-		const columns = Object.keys(row) as (keyof Row<Table>)[];
-		const values = Object.fromEntries(
-			columns.map((col) => [col, mkParameter((row: Row<Table>) => row[col])]),
-		) as Record<keyof Row<Table>, ParameterExpression>;
-		const set = Object.fromEntries(
-			columns
-				.filter((col) => !this.primaryKeys.includes(col as string))
-				.map((col) => [col, mkParameter((row: Row<Table>) => row[col])]),
-		) as Record<keyof Partial<Row<Table>>, ParameterExpression>;
-		const insertAst: Insert<Table> = mkInsert(this.schema, values, {
-			onConflict: {
-				columns: this.primaryKeys.map((pk) => pk.toString()),
-				do: {
-					kind: "update" as const,
-					set,
-				},
-			},
-		});
-		const [sql, getParams] = compileSql(insertAst);
-		const stmt = this.database.prepare(sql);
-		stmt.run(...getParams(row));
+		this.preparedUpsertRow(row);
 	}
 
 	/**
@@ -150,30 +151,32 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 		const updateAst: Update<Table> = mkUpdate(this.schema, set, where);
 
 		const [sql, getParamsRaw] = compileSql(updateAst);
-		const getParams = (
-			changes: Partial<Row<Table>>,
-			key: PrimaryKeyRecord<Table>,
-		) => {
-			return getParamsRaw({ changes, key });
-		};
 
 		const stmt = this.database.prepare(sql);
-		stmt.run(...getParams(changes, key));
+		stmt.run(...getParamsRaw({ changes, key }));
 	}
 
 	delete(key: PrimaryKeyRecord<Table>): void {
-		const { statement, getParams } = this.compiledDelete;
-		statement.run(...getParams(key));
+		this.preparedDelete(key);
 	}
 
 	findUnique(key: PrimaryKeyRecord<Table>): Row<Table> | null {
-		const stmt = this.database.prepare(`
-			SELECT * FROM ${this.tableName}
-			WHERE ${this.primaryKeys.map((pk) => `${pk} = ?`).join(" AND ")}
-		`);
-		const row = stmt.get(
-			...this.primaryKeys.map((pk: PrimaryKey<Table>[number]) => key[pk]),
+		const stmt = this.prepareQueryOne(
+			compileSql(
+				mkSelect(
+					this.schema,
+					Object.keys(this.schema.columns).map((pk) => mkColumn(pk)),
+					{
+						where: mkEq(
+							mkPkColumns(this.schema),
+							mkPkParams(this.schema, (key: PrimaryKeyRecord<Table>) => key),
+						),
+					},
+				),
+			),
 		);
+
+		const row = this.compiledFindUnique(key);
 
 		return row === undefined ? null : (row as Row<Table>);
 	}
@@ -247,8 +250,6 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 		// biome-ignore lint/style/noNonNullAssertion: <explanation>
 		const rowCount = countTotal()!["COUNT(*)"];
 
-		console.info({ beforeCount: itemBeforeCount, afterCount: itemAfterCount });
-
 		return {
 			rows,
 			rowCount,
@@ -300,11 +301,16 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 		};
 	}
 
-	private _compiledInsert?: PreparedStatement<Row<Table>>;
-	private _compiledDelete?: PreparedStatement<PrimaryKeyRecord<Table>>;
+	private _preparedInsert?: PreparedMutation<Row<Table>>;
+	private _preparedUpsert?: PreparedMutation<Row<Table>>;
+	private _preparedDelete?: PreparedMutation<PrimaryKeyRecord<Table>>;
+	private _preparedFindUnique?: PreparedQueryOne<
+		PrimaryKeyRecord<Table>,
+		Row<Table>
+	>;
 
-	private get compiledInsert(): PreparedStatement<Row<Table>> {
-		if (!this._compiledInsert) {
+	private get preparedInsertRow(): PreparedMutation<Row<Table>> {
+		if (!this._preparedInsert) {
 			const columns = Object.keys(this.schema.columns);
 			const insertAst = mkInsert(
 				this.schema,
@@ -315,18 +321,40 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 					]),
 				) as { [key in keyof Row<Table>]: Parameterizable },
 			);
-			this._compiledInsert = this.prepareStatement<Row<Table>>(
-				compileSql(insertAst),
-			);
+			this._preparedInsert = this.prepareMutation<Row<Table>>(insertAst);
 		}
-		return this._compiledInsert;
+		return this._preparedInsert;
+	}
+	private get preparedUpsertRow() {
+		if (!this._preparedUpsert) {
+			const columns = Object.keys(this.schema.columns) as (keyof Row<Table>)[];
+			const values = Object.fromEntries(
+				columns.map((col) => [col, mkParameter((row: Row<Table>) => row[col])]),
+			) as Record<keyof Row<Table>, ParameterExpression>;
+			const set = Object.fromEntries(
+				columns
+					.filter((col) => !this.primaryKeys.includes(col as string))
+					.map((col) => [col, mkParameter((row: Row<Table>) => row[col])]),
+			) as Record<keyof Partial<Row<Table>>, ParameterExpression>;
+			const insertAst: Insert<Table> = mkInsert(this.schema, values, {
+				onConflict: {
+					columns: this.primaryKeys.map((pk) => pk.toString()),
+					do: {
+						kind: "update" as const,
+						set,
+					},
+				},
+			});
+			this._preparedUpsert = this.prepareMutation<Row<Table>>(insertAst);
+		}
+		return this._preparedUpsert;
 	}
 
-	private get compiledDelete(): PreparedStatement<
+	private get preparedDelete(): PreparedMutation<
 		PrimaryKeyRecord<Table>,
 		unknown
 	> {
-		if (!this._compiledDelete) {
+		if (!this._preparedDelete) {
 			const pkColumns = mkPkColumns(this.schema);
 			const pkParams = mkPkParams(
 				this.schema,
@@ -335,9 +363,32 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 			const where: SqlExpression<Table> = mkEq(pkColumns, pkParams);
 			const deleteAst: Delete<Table> = mkDelete(this.schema, where);
 
-			this._compiledDelete = this.prepareStatement(compileSql(deleteAst));
+			this._preparedDelete = this.prepareMutation(deleteAst);
 		}
-		return this._compiledDelete;
+		return this._preparedDelete;
+	}
+
+	private get compiledFindUnique(): PreparedQueryOne<
+		PrimaryKeyRecord<Table>,
+		Row<Table>
+	> {
+		if (!this._preparedFindUnique) {
+			this._preparedFindUnique = this.prepareQueryOne(
+				compileSql(
+					mkSelect(
+						this.schema,
+						Object.keys(this.schema.columns).map((pk) => mkColumn(pk)),
+						{
+							where: mkEq(
+								mkPkColumns(this.schema),
+								mkPkParams(this.schema, (key: PrimaryKeyRecord<Table>) => key),
+							),
+						},
+					),
+				),
+			);
+		}
+		return this._preparedFindUnique;
 	}
 
 	private compileFindMany<Cursor extends PrimaryKeyRecord<Table>>(pageInput: {
@@ -519,16 +570,18 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 		sql,
 		getParams,
 	]: CompiledQuery<Context>): PreparedQueryAll<Context, Row> {
+		const prepared = this.prepareStatement([sql, getParams]);
 		return (context?: Context) =>
-			this.database.prepare(sql).all(...getParams(context)) as Row[];
+			prepared.statement.all(...getParams(context)) as Row[];
 	}
 
 	private prepareQueryOne<Context, Row = unknown>([
 		sql,
 		getParams,
 	]: CompiledQuery<Context>): PreparedQueryOne<Context, Row> {
+		const prepared = this.prepareStatement([sql, getParams]);
 		return (context?: Context) =>
-			this.database.prepare(sql).get(...getParams(context)) as Row;
+			prepared.statement.get(...getParams(context)) as Row;
 	}
 }
 

@@ -1,4 +1,5 @@
 import type { Page, PageInit } from "./Page.mjs";
+import type { Delete, Insert, Select, Update } from "./sql/Sql.mjs";
 import type {
 	PrimaryKey,
 	PrimaryKeyRecord,
@@ -13,6 +14,8 @@ export type Storage<T extends TableSchemaBase> = ReadableStorage<T> &
 	};
 
 export type ReadableStorage<T extends TableSchemaBase> = {
+	prepareQuery<Row, Context>(query: Select<T>): PreparedQuery<Row, Context>;
+
 	findUnique(key: PrimaryKeyRecord<T>): Row<T> | null;
 	findMany<Cursor extends PrimaryKeyRecord<T>>(
 		pageInput: PageInit<T, Cursor>,
@@ -20,6 +23,10 @@ export type ReadableStorage<T extends TableSchemaBase> = {
 };
 
 export type WritableStorage<T extends TableSchemaBase> = {
+	prepareMutation<Context>(
+		mutation: Insert<T> | Update<T> | Delete<T>,
+	): PreparedMutation<Context>;
+
 	insert(row: Row<T>): void;
 	upsert(row: Row<T>): void;
 	update(
@@ -27,10 +34,11 @@ export type WritableStorage<T extends TableSchemaBase> = {
 		partialRow: Partial<Omit<Row<T>, PrimaryKey<T>[number]>>,
 	): void;
 	delete(key: PrimaryKeyRecord<T>): void;
-
-	mutate(mutation: Mutation<T>): void;
-	mutateMany(mutations: Mutation<T>[]): void;
 };
+
+export type PreparedQuery<Row, Context> = (context: Context) => Row[];
+
+export type PreparedMutation<Context> = (context: Context) => void;
 
 export interface TransactionalStorage<T extends TableSchemaBase> {
 	/**

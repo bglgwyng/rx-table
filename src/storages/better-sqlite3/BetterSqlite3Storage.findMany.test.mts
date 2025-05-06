@@ -270,8 +270,6 @@ describe("SqliteStorage.findMany with composite key", () => {
 				storage.findMany(pageInput);
 			const keys = Array.from(page.rows);
 			// Debug: log actual rows returned
-			// eslint-disable-next-line no-console
-			console.log("DEBUG composite page.rows:", page.rows);
 			if (keys.length === 0) break;
 			allFetched.push(...keys);
 			if (keys.length < pageSize) break;

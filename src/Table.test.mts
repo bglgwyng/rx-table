@@ -30,29 +30,34 @@ describe("Table", () => {
 		return { storage, table };
 	}
 
-	it("insert and findUnique should work", () => {
-		const { table } = setup();
+	it("insert and findUnique should work, and persist to storage", () => {
+		const { table, storage } = setup();
 		table.insert({ id: 1, name: "Alice" });
 		const dynamic = table.findUnique({ id: 1 });
 		expect(dynamic.read()).toEqual({ id: 1, name: "Alice" });
+		// storage 레벨에서 실제로 값이 들어갔는지 확인
+		const row = storage.findUnique({ id: 1 });
+		expect(row).toEqual({ id: 1, name: "Alice" });
 	});
 
-	it("update should trigger dynamic and update value", () => {
-		const { table } = setup();
+	it("update should trigger dynamic and update value, and persist to storage", () => {
+		const { table, storage } = setup();
 		table.insert({ id: 1, name: "Alice" });
 		const dynamic = table.findUnique({ id: 1 });
 
-		let observed: { id: number; name: string } | undefined;
+		let observed: { id: number; name: string } | null | undefined;
 		const sub = dynamic.updated.subscribe(() => {
-			observed = dynamic.read() ?? undefined;
+			observed = dynamic.read();
 		});
 
 		table.update({ id: 1 }, { name: "Bob" });
 		expect(observed).toEqual({ id: 1, name: "Bob" });
+		const row = storage.findUnique({ id: 1 });
+		expect(row).toEqual({ id: 1, name: "Bob" });
 		sub.unsubscribe();
 	});
 
-	it("delete should trigger dynamic and set value to null", () => {
+	it("delete should trigger dynamic and set value to null, and persist to storage", () => {
 		const { table } = setup();
 		table.insert({ id: 1, name: "Alice" });
 		const dynamic = table.findUnique({ id: 1 });
@@ -64,6 +69,10 @@ describe("Table", () => {
 
 		table.delete({ id: 1 });
 		expect(observed).toBe(null);
+		// storage 레벨에서 실제로 값이 삭제됐는지 확인
+		const { storage } = setup();
+		const row = storage.findUnique({ id: 1 });
+		expect(row).toBeNull();
 		sub.unsubscribe();
 	});
 
