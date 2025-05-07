@@ -31,6 +31,7 @@ import {
 	mkParameter,
 	mkPkColumns,
 	mkPkParams,
+	mkPkRecords,
 	mkSelect,
 	mkTuple,
 	mkUpdate,
@@ -150,14 +151,11 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 			]),
 		) as Record<keyof Row<Table>, Parameter>;
 
-		const pkColumns = mkPkColumns(this.schema);
-		const pkParams = mkPkParams(
+		const pkParams = mkPkRecords(
 			this.schema,
 			({ key }: { key: PrimaryKeyRecord<Table> }) => key,
 		);
-		const where: Expression<Table> = mkEq(pkColumns, pkParams);
-
-		const updateAst: Update<Table> = mkUpdate(set, where);
+		const updateAst: Update<Table> = mkUpdate(set, pkParams);
 
 		const [sql, getParamsRaw] = compileStatementToSql(
 			this.tableName,

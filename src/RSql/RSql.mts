@@ -1,4 +1,11 @@
-import type { Row, TableSchemaBase } from "../types/TableSchema.mjs";
+import type {
+	ColumnName,
+	PrimaryKey,
+	PrimaryKeyRecord,
+	Row,
+	TableSchemaBase,
+	UpdatableColumnName,
+} from "../types/TableSchema.mjs";
 import type { Expression, Parameterizable } from "./Expression.mjs";
 
 export type Statement<Table extends TableSchemaBase = TableSchemaBase> =
@@ -29,13 +36,13 @@ export type Insert<Table extends TableSchemaBase = TableSchemaBase> = {
 
 export type Update<Table extends TableSchemaBase = TableSchemaBase> = {
 	kind: "update";
-	set: Record<keyof Row<Table>, Parameterizable>;
-	where?: Expression<Table>;
+	set: Record<UpdatableColumnName<Table>, Parameterizable>;
+	key: Record<PrimaryKey<Table>[number], Parameterizable>;
 };
 
 export type Delete<Table extends TableSchemaBase = TableSchemaBase> = {
 	kind: "delete";
-	where?: Expression<Table>;
+	key: Record<PrimaryKey<Table>[number], Parameterizable>;
 };
 
 export type OrderBy = {

@@ -6,6 +6,7 @@ import {
 	mkParameter,
 	mkPkColumns,
 	mkPkParams,
+	mkPkRecords,
 	mkSelect,
 } from "../RSql/mks.mjs";
 import type { PrimaryKeyRecord, Row } from "../types/TableSchema.mjs";
@@ -46,11 +47,7 @@ export function mkUpsertRow<T extends TableSchemaBase>(schema: T) {
 }
 
 export function mkDeleteRow<T extends TableSchemaBase>(schema: T) {
-	const pkColumns = mkPkColumns(schema);
-	const pkParams = mkPkParams(schema, (key: PrimaryKeyRecord<T>) => key);
-	const where: Expression<T> = mkEq(pkColumns, pkParams);
-
-	return mkDelete(where);
+	return mkDelete(mkPkRecords(schema, (key: PrimaryKeyRecord<T>) => key));
 }
 
 export function mkFindUnique<T extends TableSchemaBase>(schema: T) {

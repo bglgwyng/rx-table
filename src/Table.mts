@@ -21,6 +21,7 @@ import {
 	mkParameter,
 	mkPkColumns,
 	mkPkParams,
+	mkPkRecords,
 	mkUpdate,
 } from "./RSql/mks.mjs";
 import type { Storage } from "./Storage.mjs";
@@ -64,7 +65,9 @@ export class Table<T extends TableSchemaBase>
 			),
 		);
 		this.preparedDeleteRow = this.storage.prepareMutation<PrimaryKeyRecord<T>>(
-			mkDelete(mkPkColumns(this.tableSchema)),
+			mkDelete(
+				mkPkRecords(this.tableSchema, (key: PrimaryKeyRecord<T>) => key),
+			),
 		);
 	}
 
@@ -99,10 +102,7 @@ export class Table<T extends TableSchemaBase>
 							] as const,
 					),
 				) as Record<keyof Row<T>, Parameter>,
-				mkEq(
-					mkPkColumns(this.tableSchema),
-					mkPkParams<T, Context>(this.tableSchema, (ctx: Context) => ctx.key),
-				),
+				mkPkRecords<T, Context>(this.tableSchema, (ctx: Context) => ctx.key),
 			),
 		);
 		preparedUpdateRow({ key, changes: changes });

@@ -58,7 +58,7 @@ function* renderExpressionToSql(
 		return "*";
 	}
 
-	assert.fail("Unsupported expression type in renderExpression");
+	assert.fail(`Unsupported expression type in renderExpression ${expr.kind}`);
 }
 
 export function* renderStatementToSql<Table extends TableSchemaBase>(
@@ -132,19 +132,22 @@ export function* renderStatementToSql<Table extends TableSchemaBase>(
 				// biome-ignore lint/style/noNonNullAssertion: <explanation>
 				yield sqlAst.set[k as keyof Row<TableSchemaBase>]!;
 			}
-			if (sqlAst.where) {
-				const whereSql = yield* renderExpressionToSql(sqlAst.where);
-				sql += ` WHERE ${whereSql}`;
+
+			const where: string[] = [];
+			for (const [k, v] of Object.entries(sqlAst.key)) {
+				const whereSql = yield* renderExpressionToSql(v as Parameterizable);
+				where.push(`${k} = ${whereSql}`);
 			}
-			return sql;
+			return `${sql} WHERE ${where.join(" AND ")}`;
 		}
 		case "delete": {
-			let sql = `DELETE FROM ${table}`;
-			if (sqlAst.where) {
-				const whereSql = yield* renderExpressionToSql(sqlAst.where);
-				sql += ` WHERE ${whereSql}`;
+			const sql = `DELETE FROM ${table}`;
+			const where: string[] = [];
+			for (const [k, v] of Object.entries(sqlAst.key)) {
+				const whereSql = yield* renderExpressionToSql(v as Parameterizable);
+				where.push(`${k} = ${whereSql}`);
 			}
-			return sql;
+			return `${sql} WHERE ${where.join(" AND ")}`;
 		}
 	}
 }

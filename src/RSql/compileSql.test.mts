@@ -1,22 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { Expression, Tuple } from "./Expression.mjs";
-import type { Statement } from "./RSql.mjs";
+import type { Delete, Statement, Update } from "./RSql.mjs";
 import {
 	compileExpressionToSql,
 	compileStatementToSql,
 } from "./compileToSql.mjs";
 
-type ColumnType = {
-	kind: "number" | "string";
-};
-
-type TableBase = {
+type Table = {
 	name: string;
-	columns: Record<string, ColumnType>;
-	primaryKey: string[];
-};
-
-type Table = TableBase & {
 	columns: {
 		foo: { kind: "number" };
 		bar: { kind: "string" };
@@ -121,60 +112,47 @@ describe("compileSql", () => {
 	});
 
 	it("renders update statement with compileSql", () => {
-		const expr: Statement = {
+		const expr: Update<Table> = {
 			kind: "update",
 			set: {
 				foo: { kind: "parameter", getValue: (ctx: { foo: string }) => ctx.foo },
 			},
-			where: {
-				kind: "binOp",
-				operator: "=",
-				left: { kind: "column", name: "foo" },
-				right: { kind: "constant", value: "bar" },
+			key: {
+				foo: { kind: "constant", value: "bar" },
 			},
 		};
 		const [sql, getParams] = compileStatementToSql(table, expr);
-		expect(sql).toBe("UPDATE dummy SET foo = ? WHERE (foo = ?)");
+		expect(sql).toBe("UPDATE dummy SET foo = ? WHERE foo = ?");
 		const params = getParams({ foo: "baz" });
 		expect(params).toEqual(["baz", "bar"]);
 	});
 
 	it("renders update statement without where", () => {
-		const expr: Statement = {
+		const expr: Update<Table> = {
 			kind: "update",
 			set: {
-				foo: { kind: "constant", value: "baz" },
+				bar: { kind: "constant", value: "qux" },
+			},
+			key: {
+				foo: { kind: "constant", value: "bar" },
 			},
 		};
 		const [sql, getParams] = compileStatementToSql(table, expr);
-		expect(sql).toBe("UPDATE dummy SET foo = ?");
+		expect(sql).toBe("UPDATE dummy SET bar = ? WHERE foo = ?");
 		const params = getParams({});
-		expect(params).toEqual(["baz"]);
+		expect(params).toEqual(["qux", "bar"]);
 	});
 
 	it("renders delete statement with where", () => {
-		const expr: Statement = {
+		const expr = {
 			kind: "delete",
-			where: {
-				kind: "binOp",
-				operator: "=",
-				left: { kind: "column", name: "foo" },
-				right: { kind: "constant", value: "bar" },
+			key: {
+				foo: { kind: "constant", value: "bar" },
 			},
-		};
+		} satisfies Delete<Table>;
 		const [sql, getParams] = compileStatementToSql(table, expr);
-		expect(sql).toBe("DELETE FROM dummy WHERE (foo = ?)");
+		expect(sql).toBe("DELETE FROM dummy WHERE foo = ?");
 		const params = getParams({});
 		expect(params).toEqual(["bar"]);
-	});
-
-	it("renders delete statement without where", () => {
-		const expr: Statement = {
-			kind: "delete",
-		};
-		const [sql, getParams] = compileStatementToSql(table, expr);
-		expect(sql).toBe("DELETE FROM dummy");
-		const params = getParams({});
-		expect(params).toEqual([]);
 	});
 });

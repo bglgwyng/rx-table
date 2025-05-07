@@ -23,7 +23,11 @@ export type Row<T extends TableSchemaBase> = {
 	[key in keyof T["columns"]]: ScalarToType<T["columns"][key]>;
 };
 export type ColumnName<T extends TableSchemaBase> = string & keyof T["columns"];
-export type PrimaryKey<T extends TableSchemaBase> = T["primaryKey"];
+export type PrimaryKey<T extends TableSchemaBase> = string & T["primaryKey"];
+export type UpdatableColumnName<T extends TableSchemaBase> = Exclude<
+	ColumnName<T>,
+	PrimaryKey<T>[number]
+>;
 export type PrimaryKeyRecord<T extends TableSchemaBase> = {
 	[key in PrimaryKey<T>[number]]: ScalarToType<T["columns"][key]>;
 };

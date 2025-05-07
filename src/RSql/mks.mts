@@ -3,6 +3,7 @@ import type {
 	PrimaryKeyRecord,
 	Row,
 	TableSchemaBase,
+	UpdatableColumnName,
 } from "../types/TableSchema.mjs";
 import type { Expression, Parameter, Parameterizable } from "./Expression.mjs";
 import type { Delete, Insert, OrderBy, Select, Update } from "./RSql.mjs";
@@ -27,22 +28,22 @@ export function mkInsert<Table extends TableSchemaBase>(
 }
 
 export function mkUpdate<Table extends TableSchemaBase>(
-	set: Record<keyof Row<Table>, Parameterizable>,
-	where: Expression<Table>,
+	set: Record<UpdatableColumnName<Table>, Parameterizable>,
+	key: Record<PrimaryKey<Table>[number], Parameterizable>,
 ): Update<Table> {
 	return {
 		kind: "update",
 		set,
-		where,
+		key,
 	};
 }
 
 export function mkDelete<Table extends TableSchemaBase>(
-	where: Expression<Table>,
+	key: Record<PrimaryKey<Table>[number], Parameterizable>,
 ): Delete<Table> {
 	return {
 		kind: "delete",
-		where,
+		key,
 	};
 }
 
@@ -151,6 +152,7 @@ export function mkPkColumns<Table extends TableSchemaBase>(
 		expressions: table.primaryKey.map((pk) => ({ kind: "column", name: pk })),
 	};
 }
+
 export function mkPkParams<Table extends TableSchemaBase, Context>(
 	table: Table,
 	getValue: (ctx: Context) => PrimaryKeyRecord<Table>,
@@ -162,4 +164,16 @@ export function mkPkParams<Table extends TableSchemaBase, Context>(
 			getValue: (ctx: Context) => getValue(ctx)[pk],
 		})),
 	};
+}
+
+export function mkPkRecords<Table extends TableSchemaBase, Context>(
+	table: Table,
+	getValue: (ctx: Context) => PrimaryKeyRecord<Table>,
+): Record<PrimaryKey<Table>[number], Parameter> {
+	return Object.fromEntries(
+		table.primaryKey.map((pk) => [
+			pk,
+			mkParameter((ctx: Context) => getValue(ctx)[pk]),
+		]),
+	) as Record<PrimaryKey<Table>[number], Parameter>;
 }
