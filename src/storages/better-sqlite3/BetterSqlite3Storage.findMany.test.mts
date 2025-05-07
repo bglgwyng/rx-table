@@ -22,6 +22,7 @@ const userSchema = {
 type UserTable = typeof userSchema;
 
 describe("SqliteStorage.findMany", () => {
+	const table = "users";
 	it("returns results in orderBy direction for before+last (backward) pagination (Relay spec)", () => {
 		const db = new Database(":memory:");
 		db.exec(
@@ -169,7 +170,6 @@ describe("SqliteStorage.findMany", () => {
 	it("should render tuple of constants and parameters", () => {
 		const expr: Statement = {
 			kind: "select",
-			table: "users",
 			columns: "*",
 			where: {
 				kind: "tuple",
@@ -180,7 +180,7 @@ describe("SqliteStorage.findMany", () => {
 				],
 			},
 		};
-		const [sql, getParams] = compileStatementToSql(expr);
+		const [sql, getParams] = compileStatementToSql(table, expr);
 		const params = getParams({ name: "hello" });
 		expect(sql).toBe("SELECT * FROM users WHERE (?, ?, ?)");
 		expect(params.length).toBe(3);

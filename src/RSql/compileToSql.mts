@@ -62,6 +62,7 @@ function* renderExpressionToSql(
 }
 
 export function* renderStatementToSql<Table extends TableSchemaBase>(
+	table: string,
 	sqlAst: Statement<Table>,
 ): Generator<Parameterizable, string> {
 	switch (sqlAst.kind) {
@@ -76,7 +77,7 @@ export function* renderStatementToSql<Table extends TableSchemaBase>(
 				}
 				selection = cols.join(", ");
 			}
-			let sql = `SELECT ${selection} FROM ${sqlAst.table}`;
+			let sql = `SELECT ${selection} FROM ${table}`;
 			let paramCount = 0;
 			if (sqlAst.where) {
 				const whereSql = yield* renderExpressionToSql(sqlAst.where);
@@ -96,7 +97,7 @@ export function* renderStatementToSql<Table extends TableSchemaBase>(
 			const keys: (keyof Row<TableSchemaBase>)[] = Object.keys(
 				sqlAst.values,
 			) as (keyof Row<TableSchemaBase>)[];
-			let sql = `INSERT INTO ${sqlAst.table} (${keys.join(", ")}) VALUES (`;
+			let sql = `INSERT INTO ${table} (${keys.join(", ")}) VALUES (`;
 			const placeholders: string[] = [];
 			for (const k of keys) {
 				placeholders.push(
@@ -121,7 +122,7 @@ export function* renderStatementToSql<Table extends TableSchemaBase>(
 		}
 		case "update": {
 			const keys = Object.keys(sqlAst.set) as (keyof Row<TableSchemaBase>)[];
-			let sql = `UPDATE ${sqlAst.table} SET `;
+			let sql = `UPDATE ${table} SET `;
 			const setClauses: string[] = [];
 			for (const k of keys) {
 				setClauses.push(`${k} = ?`);
@@ -138,7 +139,7 @@ export function* renderStatementToSql<Table extends TableSchemaBase>(
 			return sql;
 		}
 		case "delete": {
-			let sql = `DELETE FROM ${sqlAst.table}`;
+			let sql = `DELETE FROM ${table}`;
 			if (sqlAst.where) {
 				const whereSql = yield* renderExpressionToSql(sqlAst.where);
 				sql += ` WHERE ${whereSql}`;
@@ -169,9 +170,10 @@ export function compileExpressionToSql<
 }
 
 export function compileStatementToSql<Table extends TableSchemaBase, Context>(
+	table: string,
 	sqlAst: Statement<Table>,
 ): CompiledQuery<Context> {
-	const gen = renderStatementToSql(sqlAst);
+	const gen = renderStatementToSql(table, sqlAst);
 	const params: Parameterizable[] = [];
 	let next = gen.next();
 	while (!next.done) {

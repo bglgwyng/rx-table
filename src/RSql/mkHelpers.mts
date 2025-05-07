@@ -14,7 +14,6 @@ import type { Expression, Parameter, Parameterizable } from "./Expression.mjs";
 
 export function mkInsertRow<T extends TableSchemaBase>(schema: T) {
 	return mkInsert(
-		schema,
 		Object.fromEntries(
 			Object.keys(schema.columns).map((col) => [
 				col,
@@ -35,7 +34,7 @@ export function mkUpsertRow<T extends TableSchemaBase>(schema: T) {
 			.map((col) => [col, mkParameter((row: Row<T>) => row[col])]),
 	) as Record<keyof Partial<Row<T>>, Parameter>;
 
-	return mkInsert(schema, values, {
+	return mkInsert(values, {
 		onConflict: {
 			columns: schema.primaryKey.map((pk) => pk.toString()),
 			do: {
@@ -51,12 +50,11 @@ export function mkDeleteRow<T extends TableSchemaBase>(schema: T) {
 	const pkParams = mkPkParams(schema, (key: PrimaryKeyRecord<T>) => key);
 	const where: Expression<T> = mkEq(pkColumns, pkParams);
 
-	return mkDelete(schema, where);
+	return mkDelete(where);
 }
 
 export function mkFindUnique<T extends TableSchemaBase>(schema: T) {
 	return mkSelect<T>(
-		schema,
 		Object.keys(schema.columns).map((pk) => mkColumn(pk)),
 		{
 			where: mkEq(

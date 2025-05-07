@@ -76,7 +76,7 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 	prepareQueryOne<Context, Row>(
 		query: Select<Table>,
 	): PreparedQueryOne<Context, Row> {
-		const [sql, getParams] = compileStatementToSql(query);
+		const [sql, getParams] = compileStatementToSql(this.tableName, query);
 		const stmt = this.database.prepare(sql);
 		return (context?: Context) =>
 			(stmt.get(...getParams(context)) as Row | undefined) ?? null;
@@ -85,7 +85,7 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 	prepareQueryAll<Context, Row>(
 		query: Select<Table>,
 	): PreparedQueryAll<Context, Row> {
-		const [sql, getParams] = compileStatementToSql(query);
+		const [sql, getParams] = compileStatementToSql(this.tableName, query);
 		const stmt = this.database.prepare(sql);
 		return (context?: Context) => stmt.all(...getParams(context)) as Row[];
 	}
@@ -93,7 +93,7 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 	prepareMutation<Context>(
 		mutation: Insert<Table> | Update<Table> | Delete<Table>,
 	): PreparedMutation<Context> {
-		const [sql, getParams] = compileStatementToSql(mutation);
+		const [sql, getParams] = compileStatementToSql(this.tableName, mutation);
 		const stmt = this.database.prepare(sql);
 
 		return (context?: Context) => stmt.run(...getParams(context));
@@ -157,9 +157,12 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 		);
 		const where: Expression<Table> = mkEq(pkColumns, pkParams);
 
-		const updateAst: Update<Table> = mkUpdate(this.schema, set, where);
+		const updateAst: Update<Table> = mkUpdate(set, where);
 
-		const [sql, getParamsRaw] = compileStatementToSql(updateAst);
+		const [sql, getParamsRaw] = compileStatementToSql(
+			this.tableName,
+			updateAst,
+		);
 
 		const stmt = this.database.prepare(sql);
 		stmt.run(...getParamsRaw({ changes, key }));
@@ -339,7 +342,7 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 		const orderBy = pageInput.orderBy;
 
 		// for load: no cursor, orderBy as is
-		const loadHeadAst: Select<Table> = mkSelect(this.schema, cursorCols, {
+		const loadHeadAst: Select<Table> = mkSelect(cursorCols, {
 			where: filter,
 			orderBy: orderBy.map((o) => ({
 				column: o.column,
@@ -351,7 +354,7 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 		});
 
 		// for load: no cursor, orderBy as is
-		const loadTailAst: Select<Table> = mkSelect(this.schema, cursorCols, {
+		const loadTailAst: Select<Table> = mkSelect(cursorCols, {
 			where: filter,
 			orderBy: orderBy.map((o) => ({
 				column: o.column,
@@ -363,7 +366,7 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 		});
 
 		// for loadMore: after cursor, forward order
-		const loadNextAst: Select<Table> = mkSelect(this.schema, cursorCols, {
+		const loadNextAst: Select<Table> = mkSelect(cursorCols, {
 			where: ands([
 				...(filter ? [filter] : []),
 				mkGT(
@@ -383,7 +386,7 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 		});
 
 		// for loadPrevious: before cursor, reverse order
-		const loadPreviousAst: Select<Table> = mkSelect(this.schema, cursorCols, {
+		const loadPreviousAst: Select<Table> = mkSelect(cursorCols, {
 			where: ands([
 				...(filter ? [filter] : []),
 				mkLT(
@@ -403,7 +406,6 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 		});
 
 		const totalCountAst: Select<Table> = mkSelect(
-			this.schema,
 			[
 				{
 					kind: "function",
@@ -411,14 +413,11 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 					args: [{ kind: "asterisk" }],
 				},
 			],
-			{
-				where: filter,
-			},
+			{ where: filter },
 		);
 
 		// Count rows after the cursor (for forward pagination)
 		const countAfterAst: Select<Table> = mkSelect(
-			this.schema,
 			[
 				{
 					kind: "function",
@@ -439,7 +438,6 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 
 		// Count rows before the cursor (for backward pagination)
 		const countBeforeAst: Select<Table> = mkSelect(
-			this.schema,
 			[
 				{
 					kind: "function",

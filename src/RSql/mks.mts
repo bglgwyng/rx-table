@@ -8,7 +8,6 @@ import type { Expression, Parameter, Parameterizable } from "./Expression.mjs";
 import type { Delete, Insert, OrderBy, Select, Update } from "./RSql.mjs";
 
 export function mkInsert<Table extends TableSchemaBase>(
-	table: Table,
 	values: { [key in keyof Row<Table>]: Parameterizable },
 	options?: {
 		onConflict?: {
@@ -22,38 +21,32 @@ export function mkInsert<Table extends TableSchemaBase>(
 ): Insert<Table> {
 	return {
 		kind: "insert",
-		table: table.name,
 		values,
 		onConflict: options?.onConflict,
 	};
 }
 
 export function mkUpdate<Table extends TableSchemaBase>(
-	table: Table,
 	set: Record<keyof Row<Table>, Parameterizable>,
 	where: Expression<Table>,
 ): Update<Table> {
 	return {
 		kind: "update",
-		table: table.name,
 		set,
 		where,
 	};
 }
 
 export function mkDelete<Table extends TableSchemaBase>(
-	table: Table,
 	where: Expression<Table>,
 ): Delete<Table> {
 	return {
 		kind: "delete",
-		table: table.name,
 		where,
 	};
 }
 
 export function mkSelect<Table extends TableSchemaBase>(
-	table: Table,
 	columns: "*" | Expression<Table>[],
 	options?: {
 		where?: Expression<Table>;
@@ -63,7 +56,6 @@ export function mkSelect<Table extends TableSchemaBase>(
 ): Select<TableSchemaBase> {
 	return {
 		kind: "select",
-		table: table.name,
 		columns,
 		...options,
 	};

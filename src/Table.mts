@@ -52,7 +52,6 @@ export class Table<T extends TableSchemaBase>
 
 		this.preparedInsertRow = this.storage.prepareMutation<Row<T>>(
 			mkInsert(
-				this.tableSchema,
 				Object.fromEntries(
 					Object.entries(this.tableSchema.columns).map(
 						([col]) =>
@@ -65,7 +64,7 @@ export class Table<T extends TableSchemaBase>
 			),
 		);
 		this.preparedDeleteRow = this.storage.prepareMutation<PrimaryKeyRecord<T>>(
-			mkDelete(this.tableSchema, mkPkColumns(this.tableSchema)),
+			mkDelete(mkPkColumns(this.tableSchema)),
 		);
 	}
 
@@ -89,7 +88,6 @@ export class Table<T extends TableSchemaBase>
 		};
 		const preparedUpdateRow = this.storage.prepareMutation<Context>(
 			mkUpdate(
-				this.tableSchema,
 				Object.fromEntries(
 					Object.entries(changes).map(
 						([col]) =>
