@@ -15,7 +15,13 @@ import {
 	type Tuple,
 	ands,
 } from "../../RSql/Expression.mjs";
-import type { Delete, Insert, Select, Update } from "../../RSql/RSql.mjs";
+import type {
+	Count,
+	Delete,
+	Insert,
+	Select,
+	Update,
+} from "../../RSql/RSql.mjs";
 import { compileStatementToSql } from "../../RSql/compileToSql.mjs";
 import {
 	mkDeleteRow,
@@ -25,6 +31,7 @@ import {
 } from "../../RSql/mkHelpers.mjs";
 import {
 	mkColumn,
+	mkCount,
 	mkEq,
 	mkGT,
 	mkLT,
@@ -48,6 +55,7 @@ import type {
 } from "../../types/TableSchema.mjs";
 import type { TableSchemaBase } from "../../types/TableSchema.mjs";
 import type {
+	PreparedCount,
 	PreparedMutation,
 	PreparedQueryAll,
 	PreparedQueryOne,
@@ -89,6 +97,13 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 		const [sql, getParams] = compileStatementToSql(this.tableName, query);
 		const stmt = this.database.prepare(sql);
 		return (context?: Context) => stmt.all(...getParams(context)) as Row[];
+	}
+
+	prepareCount<Context>(query: Count<Table>): PreparedCount<Context> {
+		const [sql, getParams] = compileStatementToSql(this.tableName, query);
+		const stmt = this.database.prepare(sql);
+		return (context?: Context) =>
+			(stmt.get(...getParams(context)) as { "COUNT(*)": number })["COUNT(*)"];
 	}
 
 	prepareMutation<Context>(
@@ -226,8 +241,7 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 			if (rows.length > 0) {
 				// biome-ignore lint/style/noNonNullAssertion: <explanation>
 				const endCursor = rows.at(-1)!;
-				// biome-ignore lint/style/noNonNullAssertion: <explanation>
-				itemAfterCount = countAfter({ after: endCursor })!["COUNT(*)"];
+				itemAfterCount = countAfter({ after: endCursor });
 			} else {
 				itemAfterCount = 0;
 			}
@@ -236,14 +250,12 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 			if (rows.length > 0) {
 				// biome-ignore lint/style/noNonNullAssertion: <explanation>
 				const startCursor = rows[0]!;
-				// biome-ignore lint/style/noNonNullAssertion: <explanation>
-				itemBeforeCount = countBefore({ before: startCursor })!["COUNT(*)"];
+				itemBeforeCount = countBefore({ before: startCursor });
 			} else {
 				itemBeforeCount = 0;
 			}
 		}
-		// biome-ignore lint/style/noNonNullAssertion: <explanation>
-		const rowCount = countTotal()!["COUNT(*)"];
+		const rowCount = countTotal();
 
 		return {
 			rows,
@@ -291,8 +303,7 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 							cursor: pageInput.before,
 							limit: pageInput.last,
 						}),
-			// biome-ignore lint/style/noNonNullAssertion: <explanation>
-			countTotal: () => countTotal()!["COUNT(*)"],
+			countTotal,
 		};
 	}
 
@@ -403,55 +414,28 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 			),
 		});
 
-		const totalCountAst: Select<Table> = mkSelect(
-			[
-				{
-					kind: "function",
-					name: "COUNT",
-					args: [{ kind: "asterisk" }],
-				},
-			],
-			{ where: filter },
-		);
+		const totalCountAst: Count<Table> = mkCount(filter);
 
 		// Count rows after the cursor (for forward pagination)
-		const countAfterAst: Select<Table> = mkSelect(
-			[
-				{
-					kind: "function",
-					name: "COUNT",
-					args: [{ kind: "asterisk" }],
-				},
-			],
-			{
-				where: ands([
-					...(filter ? [filter] : []),
-					mkGT(
-						cursorAsTuple,
-						mkCursorParams((context: { after: Cursor }) => context.after),
-					),
-				]),
-			},
+		const countAfterAst: Count<Table> = mkCount(
+			ands([
+				...(filter ? [filter] : []),
+				mkGT(
+					cursorAsTuple,
+					mkCursorParams((context: { after: Cursor }) => context.after),
+				),
+			]),
 		);
 
 		// Count rows before the cursor (for backward pagination)
-		const countBeforeAst: Select<Table> = mkSelect(
-			[
-				{
-					kind: "function",
-					name: "COUNT",
-					args: [{ kind: "asterisk" }],
-				},
-			],
-			{
-				where: ands([
-					...(filter ? [filter] : []),
-					mkLT(
-						cursorAsTuple,
-						mkCursorParams((context: { before: Cursor }) => context.before),
-					),
-				]),
-			},
+		const countBeforeAst: Count<Table> = mkCount(
+			ands([
+				...(filter ? [filter] : []),
+				mkLT(
+					cursorAsTuple,
+					mkCursorParams((context: { before: Cursor }) => context.before),
+				),
+			]),
 		);
 
 		return {
@@ -459,9 +443,9 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 			loadLast: this.prepareQueryAll(loadTailAst),
 			loadNext: this.prepareQueryAll(loadNextAst),
 			loadPrev: this.prepareQueryAll(loadPreviousAst),
-			countTotal: this.prepareQueryOne(totalCountAst),
-			countAfter: this.prepareQueryOne(countAfterAst),
-			countBefore: this.prepareQueryOne(countBeforeAst),
+			countTotal: this.prepareCount(totalCountAst),
+			countAfter: this.prepareCount(countAfterAst),
+			countBefore: this.prepareCount(countBeforeAst),
 		};
 	}
 }

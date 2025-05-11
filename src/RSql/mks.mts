@@ -6,7 +6,14 @@ import type {
 	UpdatableColumnName,
 } from "../types/TableSchema.mjs";
 import type { Expression, Parameter, Parameterizable } from "./Expression.mjs";
-import type { Delete, Insert, OrderBy, Select, Update } from "./RSql.mjs";
+import type {
+	Count,
+	Delete,
+	Insert,
+	OrderBy,
+	Select,
+	Update,
+} from "./RSql.mjs";
 
 export function mkInsert<Table extends TableSchemaBase>(
 	values: { [key in keyof Row<Table>]: Parameterizable },
@@ -59,6 +66,15 @@ export function mkSelect<Table extends TableSchemaBase>(
 		kind: "select",
 		columns,
 		...options,
+	};
+}
+
+export function mkCount<Table extends TableSchemaBase>(
+	where?: Expression<Table>,
+): Count<TableSchemaBase> {
+	return {
+		kind: "count",
+		where,
 	};
 }
 

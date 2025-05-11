@@ -1,5 +1,6 @@
 import type { Expression } from "./RSql/Expression.mjs";
 import type {
+	PreparedCount,
 	PreparedQueryAll,
 	PreparedQueryOne,
 } from "./types/PreparedStatement.mjs";
@@ -100,7 +101,7 @@ export type PreparedQueriesForFindMany<
 	loadLast: PreparedQueryAll<PageParameter<TableSchema, Cursor, false>, Cursor>;
 	loadNext: PreparedQueryAll<PageParameter<TableSchema, Cursor, true>, Cursor>;
 	loadPrev: PreparedQueryAll<PageParameter<TableSchema, Cursor, true>, Cursor>;
-	countTotal: PreparedQueryOne<never, { "COUNT(*)": number }>;
-	countAfter: PreparedQueryOne<{ after: Cursor }, { "COUNT(*)": number }>;
-	countBefore: PreparedQueryOne<{ before: Cursor }, { "COUNT(*)": number }>;
+	countTotal: PreparedCount<never>;
+	countAfter: PreparedCount<{ after: Cursor }>;
+	countBefore: PreparedCount<{ before: Cursor }>;
 };

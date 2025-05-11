@@ -97,6 +97,14 @@ export function* renderStatementToSql<Table extends TableSchemaBase>(
 			}
 			return sql;
 		}
+		case "count": {
+			let sql = `SELECT COUNT(*) FROM ${table}`;
+			if (sqlAst.where) {
+				const whereSql = yield* renderExpressionToSql(sqlAst.where);
+				sql += ` WHERE ${whereSql}`;
+			}
+			return sql;
+		}
 		case "insert": {
 			const keys: (keyof Row<TableSchemaBase>)[] = Object.keys(
 				sqlAst.values,
@@ -153,6 +161,7 @@ export function* renderStatementToSql<Table extends TableSchemaBase>(
 			return `${sql} WHERE ${where.join(" AND ")}`;
 		}
 	}
+	assert.fail(`Unsupported statement type in renderStatement ${sqlAst.kind}`);
 }
 
 export function compileExpressionToSql<

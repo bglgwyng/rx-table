@@ -10,6 +10,7 @@ import type { Expression, Parameterizable } from "./Expression.mjs";
 
 export type Statement<Table extends TableSchemaBase = TableSchemaBase> =
 	| Select<Table>
+	| Count<Table>
 	| Insert<Table>
 	| Update<Table>
 	| Delete<Table>;
@@ -20,6 +21,11 @@ export type Select<Table extends TableSchemaBase = TableSchemaBase> = {
 	where?: Expression<Table>;
 	orderBy?: OrderBy[];
 	limit?: Parameterizable;
+};
+
+export type Count<Table extends TableSchemaBase = TableSchemaBase> = {
+	kind: "count";
+	where?: Expression<Table>;
 };
 
 export type Insert<Table extends TableSchemaBase = TableSchemaBase> = {
