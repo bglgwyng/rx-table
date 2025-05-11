@@ -115,14 +115,14 @@ describe("compileSql", () => {
 		const expr: Update<Table> = {
 			kind: "update",
 			set: {
-				foo: { kind: "parameter", getValue: (ctx: { foo: string }) => ctx.foo },
+				bar: { kind: "parameter", getValue: (ctx: { foo: string }) => ctx.foo },
 			},
 			key: {
 				foo: { kind: "constant", value: "bar" },
 			},
 		};
 		const [sql, getParams] = compileStatementToSql(table, expr);
-		expect(sql).toBe("UPDATE dummy SET foo = ? WHERE foo = ?");
+		expect(sql).toBe("UPDATE dummy SET bar = ? WHERE foo = ?");
 		const params = getParams({ foo: "baz" });
 		expect(params).toEqual(["baz", "bar"]);
 	});

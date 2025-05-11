@@ -1,5 +1,9 @@
 import assert from "assert";
-import type { Row, TableSchemaBase } from "../types/TableSchema.mjs";
+import type {
+	Row,
+	TableSchemaBase,
+	UpdatableColumnName,
+} from "../types/TableSchema.mjs";
 import {
 	type Expression,
 	type Parameterizable,
@@ -121,7 +125,7 @@ export function* renderStatementToSql<Table extends TableSchemaBase>(
 			return sql;
 		}
 		case "update": {
-			const keys = Object.keys(sqlAst.set) as (keyof Row<TableSchemaBase>)[];
+			const keys = Object.keys(sqlAst.set) as UpdatableColumnName<Table>[];
 			let sql = `UPDATE ${table} SET `;
 			const setClauses: string[] = [];
 			for (const k of keys) {
@@ -129,8 +133,7 @@ export function* renderStatementToSql<Table extends TableSchemaBase>(
 			}
 			sql += setClauses.join(", ");
 			for (const k of keys) {
-				// biome-ignore lint/style/noNonNullAssertion: <explanation>
-				yield sqlAst.set[k as keyof Row<TableSchemaBase>]!;
+				yield sqlAst.set[k as UpdatableColumnName<Table>];
 			}
 
 			const where: string[] = [];
