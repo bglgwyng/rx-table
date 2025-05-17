@@ -49,7 +49,7 @@ describe("compileSql", () => {
 			},
 		};
 		const [sql, getParams] = compileStatementToSql(table, expr);
-		expect(sql).toBe("SELECT * FROM dummy WHERE (?, ?, ?)");
+		expect(sql).toBe("SELECT * FROM (dummy) WHERE (?, ?, ?)");
 		const params = getParams({ name: "hello" });
 		expect(params).toEqual([1, "hello", 42]);
 	});
@@ -66,7 +66,7 @@ describe("compileSql", () => {
 			},
 		};
 		const [sql, getParams] = compileStatementToSql(table, expr);
-		expect(sql).toBe("SELECT * FROM dummy WHERE (foo > ?)");
+		expect(sql).toBe("SELECT * FROM (dummy) WHERE (foo > ?)");
 		const params = getParams({});
 		expect(params).toEqual([5]);
 	});

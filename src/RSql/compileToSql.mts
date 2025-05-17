@@ -81,7 +81,7 @@ export function* renderStatementToSql<Table extends TableSchemaBase>(
 				}
 				selection = cols.join(", ");
 			}
-			let sql = `SELECT ${selection} FROM ${table}`;
+			let sql = `SELECT ${selection} FROM (${table})`;
 			let paramCount = 0;
 			if (sqlAst.where) {
 				const whereSql = yield* renderExpressionToSql(sqlAst.where);
@@ -98,7 +98,7 @@ export function* renderStatementToSql<Table extends TableSchemaBase>(
 			return sql;
 		}
 		case "count": {
-			let sql = `SELECT COUNT(*) FROM ${table}`;
+			let sql = `SELECT COUNT(*) FROM (${table})`;
 			if (sqlAst.where) {
 				const whereSql = yield* renderExpressionToSql(sqlAst.where);
 				sql += ` WHERE ${whereSql}`;
