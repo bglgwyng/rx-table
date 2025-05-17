@@ -81,12 +81,8 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 	prepareCount<Context>(query: Count<Table>): PreparedCount<Context> {
 		const [sql, getParams] = compileStatementToSql(this.tableName, query);
 		const stmt = this.database.prepare(sql);
-		return (context?: Context) => {
-			console.info("#", stmt.source, getParams(context));
-			return (stmt.get(...getParams(context)) as { "COUNT(*)": number })[
-				"COUNT(*)"
-			];
-		};
+		return (context?: Context) =>
+			(stmt.get(...getParams(context)) as { "COUNT(*)": number })["COUNT(*)"];
 	}
 
 	prepareMutation<Context>(
@@ -211,18 +207,26 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 		const rowCount = countTotal();
 
 		const itemBeforeCount =
-			pageInput.kind === "forward" && pageInput.after === undefined
-				? 0
+			pageInput.kind === "forward"
+				? pageInput.after === undefined
+					? 0
+					: rows.length > 0
+						? countBefore(rows[0]!)
+						: rowCount
 				: rows.length > 0
-					? countBefore(startCursor!)
-					: rowCount;
+					? countBefore(rows[0]!)
+					: 0;
 
 		const itemAfterCount =
-			pageInput.kind === "backward" && pageInput.before === undefined
-				? 0
+			pageInput.kind === "backward"
+				? pageInput.before === undefined
+					? 0
+					: rows.length > 0
+						? countAfter(rows.at(-1)!, true)
+						: rowCount
 				: rows.length > 0
 					? countAfter(rows.at(-1)!)
-					: rowCount;
+					: 0;
 
 		// Get total count
 

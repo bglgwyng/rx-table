@@ -216,6 +216,35 @@ describe("SqliteStorage.findMany", () => {
 		}
 		expect(allFetchedIds).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 	});
+
+	it("returns correct counts for backward pagination with no results", () => {
+		const db = new Database(":memory:");
+		db.exec(
+			"CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)",
+		);
+		const storage = new BetterSqlite3Storage<UserTable>(userSchema, db);
+
+		// Insert some test data
+		for (let i = 1; i <= 3; ++i) {
+			storage.insert({ id: i, name: `User${i}`, age: 20 + i });
+		}
+
+		// Try to get items after an ID that's higher than any existing
+		const backwardInput: PageInit<UserTable, { id: number }> = {
+			kind: "backward",
+			before: { id: 0 }, // This ID doesn't exist
+			last: 5,
+			orderBy: [{ column: "id", direction: "asc" }],
+		};
+
+		const page = storage.findMany(backwardInput);
+		const ids = Array.from(page.rows).map((pk) => pk.id);
+
+		expect(ids).toEqual([]);
+		expect(page.itemBeforeCount).toBe(0);
+		expect(page.itemAfterCount).toBe(3);
+		expect(page.rowCount).toBe(3);
+	});
 });
 
 const compositeTableSchema = {
