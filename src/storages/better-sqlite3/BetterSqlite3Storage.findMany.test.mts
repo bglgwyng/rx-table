@@ -43,6 +43,7 @@ describe("SqliteStorage.findMany", () => {
 		const forwardIds = Array.from(forwardPage.rows).map((pk) => pk.id);
 		expect(forwardPage.itemBeforeCount).toBe(3);
 		expect(forwardPage.itemAfterCount).toBe(4);
+		expect(forwardIds).toEqual([4, 5, 6]);
 		// backward pagination
 		const backwardInput: PageInit<UserTable, { id: number }> = {
 			kind: "backward",
@@ -52,9 +53,9 @@ describe("SqliteStorage.findMany", () => {
 		};
 		const backwardPage = storage.findMany(backwardInput);
 		const backwardIds = Array.from(backwardPage.rows).map((pk) => pk.id);
+
 		expect(backwardPage.itemBeforeCount).toBe(3);
 		expect(backwardPage.itemAfterCount).toBe(4);
-		// forward: [4,5,6], backward: [4,5,6]
 		expect(backwardIds).toEqual([4, 5, 6]);
 	});
 

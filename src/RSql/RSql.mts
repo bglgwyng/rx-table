@@ -15,7 +15,10 @@ export type Statement<Table extends TableSchemaBase = TableSchemaBase> =
 	| Update<Table>
 	| Delete<Table>;
 
-export type Select<Table extends TableSchemaBase = TableSchemaBase> = {
+export type Select<
+	Table extends TableSchemaBase = TableSchemaBase,
+	Context = unknown,
+> = {
 	kind: "select";
 	columns: "*" | Expression<Table>[];
 	where?: Expression<Table>;
@@ -23,7 +26,10 @@ export type Select<Table extends TableSchemaBase = TableSchemaBase> = {
 	limit?: Parameterizable;
 };
 
-export type Count<Table extends TableSchemaBase = TableSchemaBase> = {
+export type Count<
+	Table extends TableSchemaBase = TableSchemaBase,
+	Context = unknown,
+> = {
 	kind: "count";
 	where?: Expression<Table>;
 };

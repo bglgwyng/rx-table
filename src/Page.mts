@@ -1,15 +1,17 @@
-import type { Expression } from "./RSql/Expression.mjs";
-import type {
-	PreparedCount,
-	PreparedQueryAll,
-	PreparedQueryOne,
-} from "./types/PreparedStatement.mjs";
-import type {
-	ColumnName,
-	PrimaryKeyRecord,
-	Row,
-	TableSchemaBase,
-} from "./types/TableSchema.mjs";
+import assert from "assert";
+import { type Expression, type Tuple, ands } from "./RSql/Expression.mjs";
+import type { Count, Select } from "./RSql/RSql.mjs";
+import {
+	mkColumn,
+	mkCount,
+	mkGT,
+	mkLT,
+	mkParameter,
+	mkSelect,
+	mkTuple,
+} from "./RSql/mks.mjs";
+import type { PrimaryKeyRecord, Row } from "./types/TableSchema.mjs";
+import type { TableSchemaBase } from "./types/TableSchema.mjs";
 
 export type PageDelta<T extends TableSchemaBase> = (
 	| {
@@ -90,18 +92,156 @@ export type PageParameter<
 > = {
 	limit: number;
 } & (HasCursor extends true ? { cursor: Cursor } : Record<string, unknown>);
+
 export type PreparedQueriesForFindMany<
 	TableSchema extends TableSchemaBase,
 	Cursor extends PrimaryKeyRecord<TableSchema>,
 > = {
-	loadFirst: PreparedQueryAll<
-		PageParameter<TableSchema, Cursor, false>,
-		Cursor
-	>;
-	loadLast: PreparedQueryAll<PageParameter<TableSchema, Cursor, false>, Cursor>;
-	loadNext: PreparedQueryAll<PageParameter<TableSchema, Cursor, true>, Cursor>;
-	loadPrev: PreparedQueryAll<PageParameter<TableSchema, Cursor, true>, Cursor>;
-	countTotal: PreparedCount<never>;
-	countAfter: PreparedCount<{ after: Cursor }>;
-	countBefore: PreparedCount<{ before: Cursor }>;
+	loadFirst: Select<TableSchema, never>;
+	loadLast: Select<TableSchema, never>;
+	loadNext: Select<TableSchema, Cursor>;
+	loadPrev: Select<TableSchema, Cursor>;
+	countTotal: Count<TableSchema, unknown>;
+	countAfter: Count<TableSchema, { after: Cursor }>;
+	countBefore: Count<TableSchema, { before: Cursor }>;
 };
+
+export function compileFindMany<
+	Table extends TableSchemaBase,
+	Cursor extends PrimaryKeyRecord<Table>,
+>(
+	table: Table,
+	pageInput: {
+		filter?: Expression<Table>;
+		orderBy: readonly {
+			column: string & keyof Cursor;
+			direction: "asc" | "desc";
+		}[];
+	},
+): PreparedQueriesForFindMany<Table, Cursor> {
+	assert(
+		table.primaryKey.every((pk) =>
+			pageInput.orderBy.some((o) => o.column === pk),
+		),
+		"orderBy must include all primary key columns",
+	);
+	assert(
+		pageInput.orderBy.every((o) => o.direction === "asc") ||
+			pageInput.orderBy.every((o) => o.direction === "desc"),
+		"orderBy must be all ascending or all descending",
+	);
+	const cursorCols = pageInput.orderBy.map((o) => mkColumn(o.column));
+	const cursorAsTuple = mkTuple(cursorCols);
+
+	const mkCursorParams = <Context, _ = unknown>(
+		getCursor: (context: Context) => Cursor,
+	): Tuple<Table> => ({
+		kind: "tuple",
+		expressions: pageInput.orderBy.map((col) => ({
+			kind: "parameter",
+			getValue: (ctx: Context) => getCursor(ctx)[col.column],
+		})),
+	});
+
+	// Use pkColumns, pkParams, selectCols from upper scope
+	const filter = pageInput.filter;
+	const orderBy = pageInput.orderBy;
+
+	// for load: no cursor, orderBy as is
+	const loadHeadAst: Select<Table> = mkSelect(cursorCols, {
+		where: filter,
+		orderBy: orderBy.map((o) => ({
+			column: o.column,
+			direction: o.direction,
+		})),
+		limit: mkParameter(
+			(context: PageParameter<Table, Cursor, false>) => context.limit,
+		),
+	});
+
+	// for load: no cursor, orderBy as is
+	const loadTailAst: Select<Table> = mkSelect(cursorCols, {
+		where: filter,
+		orderBy: orderBy.map((o) => ({
+			column: o.column,
+			direction: invertDirection(o.direction),
+		})),
+		limit: mkParameter(
+			(context: PageParameter<Table, Cursor, false>) => context.limit,
+		),
+	});
+
+	// for loadMore: after cursor, forward order
+	const loadNextAst: Select<Table> = mkSelect(cursorCols, {
+		where: ands([
+			...(filter ? [filter] : []),
+			mkGT(
+				cursorAsTuple,
+				mkCursorParams(
+					(context: PageParameter<Table, Cursor, true>) => context.cursor,
+				),
+			),
+		]),
+		orderBy: orderBy.map((o) => ({
+			column: o.column,
+			direction: o.direction,
+		})),
+		limit: mkParameter(
+			(context: PageParameter<Table, Cursor, true>) => context.limit,
+		),
+	});
+
+	// for loadPrevious: before cursor, reverse order
+	const loadPreviousAst: Select<Table> = mkSelect(cursorCols, {
+		where: ands([
+			...(filter ? [filter] : []),
+			mkLT(
+				cursorAsTuple,
+				mkCursorParams(
+					(context: PageParameter<Table, Cursor, true>) => context.cursor,
+				),
+			),
+		]),
+		orderBy: orderBy.map((o) => ({
+			column: o.column,
+			direction: invertDirection(o.direction),
+		})),
+		limit: mkParameter(
+			(context: PageParameter<Table, Cursor, true>) => context.limit,
+		),
+	});
+
+	const totalCountAst: Count<Table> = mkCount(filter);
+
+	// Count rows after the cursor (for forward pagination)
+	const countAfterAst: Count<Table> = mkCount(
+		ands([
+			...(filter ? [filter] : []),
+			mkGT(
+				cursorAsTuple,
+				mkCursorParams((context: { after: Cursor }) => context.after),
+			),
+		]),
+	);
+
+	// Count rows before the cursor (for backward pagination)
+	const countBeforeAst: Count<Table> = mkCount(
+		ands([
+			...(filter ? [filter] : []),
+			mkLT(
+				cursorAsTuple,
+				mkCursorParams((context: { before: Cursor }) => context.before),
+			),
+		]),
+	);
+
+	return {
+		loadFirst: loadHeadAst,
+		loadLast: loadTailAst,
+		loadNext: loadNextAst,
+		loadPrev: loadPreviousAst,
+		countTotal: totalCountAst,
+		countAfter: countAfterAst,
+		countBefore: countBeforeAst,
+	};
+}
