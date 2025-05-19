@@ -17,6 +17,7 @@ import type {
 } from "./RSql.mjs";
 
 export function mkInsert<Table extends TableSchemaBase>(
+	into: TableRef<Table>,
 	values: { [key in keyof Row<Table>]: Parameterizable },
 	options?: {
 		onConflict?: {
@@ -30,27 +31,32 @@ export function mkInsert<Table extends TableSchemaBase>(
 ): Insert<Table> {
 	return {
 		kind: "insert",
+		into,
 		values,
 		onConflict: options?.onConflict,
 	};
 }
 
 export function mkUpdate<Table extends TableSchemaBase>(
+	into: TableRef<Table>,
 	set: Record<UpdatableColumnName<Table>, Parameterizable>,
 	key: Record<PrimaryKey<Table>[number], Parameterizable>,
 ): Update<Table> {
 	return {
 		kind: "update",
+		into,
 		set,
 		key,
 	};
 }
 
 export function mkDelete<Table extends TableSchemaBase>(
+	from: TableRef<Table>,
 	key: Record<PrimaryKey<Table>[number], Parameterizable>,
 ): Delete<Table> {
 	return {
 		kind: "delete",
+		from,
 		key,
 	};
 }

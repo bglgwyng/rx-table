@@ -186,7 +186,7 @@ describe("SqliteStorage.findMany", () => {
 				],
 			},
 		};
-		const [sql, getParams] = compileStatementToSql(table, expr);
+		const [sql, getParams] = compileStatementToSql(expr);
 		const params = getParams({ name: "hello" });
 		expect(sql).toBe("SELECT * FROM (users) WHERE (?, ?, ?)");
 		expect(params.length).toBe(3);

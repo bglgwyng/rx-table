@@ -9,14 +9,15 @@ import {
 	mkPkRecords,
 	mkSelect,
 } from "../RSql/mks.mjs";
-import type { PrimaryKeyRecord, Row } from "../types/TableSchema.mjs";
+import type { PrimaryKeyRecord, Row, TableRef } from "../types/TableSchema.mjs";
 import type { TableSchemaBase } from "../types/TableSchema.mjs";
 import type { Expression, Parameter, Parameterizable } from "./Expression.mjs";
 
-export function mkInsertRow<T extends TableSchemaBase>(schema: T) {
+export function mkInsertRow<T extends TableSchemaBase>(table: TableRef<T>) {
 	return mkInsert(
+		table,
 		Object.fromEntries(
-			Object.keys(schema.columns).map((col) => [
+			Object.keys(table.schema.columns).map((col) => [
 				col,
 				mkParameter((row: Row<T>) => row[col]),
 			]),
@@ -24,20 +25,20 @@ export function mkInsertRow<T extends TableSchemaBase>(schema: T) {
 	);
 }
 
-export function mkUpsertRow<T extends TableSchemaBase>(schema: T) {
-	const columns = Object.keys(schema.columns) as (keyof Row<T>)[];
+export function mkUpsertRow<T extends TableSchemaBase>(table: TableRef<T>) {
+	const columns = Object.keys(table.schema.columns) as (keyof Row<T>)[];
 	const values = Object.fromEntries(
 		columns.map((col) => [col, mkParameter((row: Row<T>) => row[col])]),
 	) as Record<keyof Row<T>, Parameter>;
 	const set = Object.fromEntries(
 		columns
-			.filter((col) => !schema.primaryKey.includes(col as string))
+			.filter((col) => !table.schema.primaryKey.includes(col as string))
 			.map((col) => [col, mkParameter((row: Row<T>) => row[col])]),
 	) as Record<keyof Partial<Row<T>>, Parameter>;
 
-	return mkInsert(values, {
+	return mkInsert(table, values, {
 		onConflict: {
-			columns: schema.primaryKey.map((pk) => pk.toString()),
+			columns: table.schema.primaryKey.map((pk) => pk.toString()),
 			do: {
 				kind: "update" as const,
 				set,
@@ -46,8 +47,11 @@ export function mkUpsertRow<T extends TableSchemaBase>(schema: T) {
 	});
 }
 
-export function mkDeleteRow<T extends TableSchemaBase>(schema: T) {
-	return mkDelete(mkPkRecords(schema, (key: PrimaryKeyRecord<T>) => key));
+export function mkDeleteRow<T extends TableSchemaBase>(table: TableRef<T>) {
+	return mkDelete(
+		table,
+		mkPkRecords(table.schema, (key: PrimaryKeyRecord<T>) => key),
+	);
 }
 
 export function mkFindUnique<T extends TableSchemaBase>(schema: T) {

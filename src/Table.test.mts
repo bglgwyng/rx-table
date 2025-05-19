@@ -26,7 +26,14 @@ function createSqliteStorage() {
 describe("Table", () => {
 	function setup() {
 		const storage = createSqliteStorage();
-		const table = new Table<UserTable>(userTableSchema, storage);
+		const table = new Table<UserTable>(
+			{
+				kind: "base",
+				name: "User",
+				schema: userTableSchema,
+			},
+			storage,
+		);
 		return { storage, table };
 	}
 

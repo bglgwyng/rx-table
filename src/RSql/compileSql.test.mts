@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Expression, Tuple } from "./Expression.mjs";
-import type { Delete, Select, Statement, Update } from "./RSql.mjs";
+import type { Delete, Insert, Select, Statement, Update } from "./RSql.mjs";
 import {
 	compileExpressionToSql,
 	compileStatementToSql,
@@ -61,7 +61,7 @@ describe("compileSql", () => {
 				],
 			},
 		};
-		const [sql, getParams] = compileStatementToSql(table, expr);
+		const [sql, getParams] = compileStatementToSql(expr);
 		expect(sql).toBe("SELECT * FROM (dummy) WHERE (?, ?, ?)");
 		const params = getParams({ name: "hello" });
 		expect(params).toEqual([1, "hello", 42]);
@@ -79,7 +79,7 @@ describe("compileSql", () => {
 				right: { kind: "constant", value: 5 },
 			},
 		};
-		const [sql, getParams] = compileStatementToSql(table, expr);
+		const [sql, getParams] = compileStatementToSql(expr);
 		expect(sql).toBe("SELECT * FROM (dummy) WHERE (foo > ?)");
 		const params = getParams({});
 		expect(params).toEqual([5]);
@@ -113,13 +113,14 @@ describe("compileSql", () => {
 	});
 
 	it("renders insert statement with compileSql", () => {
-		const expr: Statement = {
+		const expr: Insert<Table> = {
 			kind: "insert",
+			into: table,
 			values: {
 				foo: { kind: "parameter", getValue: (ctx: { foo: string }) => ctx.foo },
 			},
 		};
-		const [sql, getParams] = compileStatementToSql(table, expr);
+		const [sql, getParams] = compileStatementToSql(expr);
 		expect(sql).toBe("INSERT INTO dummy (foo) VALUES (?)");
 		const params = getParams({ foo: "bar" });
 		expect(params).toEqual(["bar"]);
@@ -128,6 +129,7 @@ describe("compileSql", () => {
 	it("renders update statement with compileSql", () => {
 		const expr: Update<Table> = {
 			kind: "update",
+			into: table,
 			set: {
 				bar: { kind: "parameter", getValue: (ctx: { foo: string }) => ctx.foo },
 			},
@@ -135,7 +137,7 @@ describe("compileSql", () => {
 				foo: { kind: "constant", value: "bar" },
 			},
 		};
-		const [sql, getParams] = compileStatementToSql(table, expr);
+		const [sql, getParams] = compileStatementToSql(expr);
 		expect(sql).toBe("UPDATE dummy SET bar = ? WHERE foo = ?");
 		const params = getParams({ foo: "baz" });
 		expect(params).toEqual(["baz", "bar"]);
@@ -144,6 +146,7 @@ describe("compileSql", () => {
 	it("renders update statement without where", () => {
 		const expr: Update<Table> = {
 			kind: "update",
+			into: table,
 			set: {
 				bar: { kind: "constant", value: "qux" },
 			},
@@ -151,20 +154,21 @@ describe("compileSql", () => {
 				foo: { kind: "constant", value: "bar" },
 			},
 		};
-		const [sql, getParams] = compileStatementToSql(table, expr);
+		const [sql, getParams] = compileStatementToSql(expr);
 		expect(sql).toBe("UPDATE dummy SET bar = ? WHERE foo = ?");
 		const params = getParams({});
 		expect(params).toEqual(["qux", "bar"]);
 	});
 
 	it("renders delete statement with where", () => {
-		const expr = {
+		const expr: Delete<Table> = {
 			kind: "delete",
+			from: table,
 			key: {
 				foo: { kind: "constant", value: "bar" },
 			},
-		} satisfies Delete<Table>;
-		const [sql, getParams] = compileStatementToSql(table, expr);
+		};
+		const [sql, getParams] = compileStatementToSql(expr);
 		expect(sql).toBe("DELETE FROM dummy WHERE foo = ?");
 		const params = getParams({});
 		expect(params).toEqual(["bar"]);

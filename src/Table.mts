@@ -29,6 +29,7 @@ import { type Dynamic, createDynamic } from "./core/Dynamic.mjs";
 import type {
 	ReadableTable,
 	TableEvent,
+	TableRef,
 	WritableTable,
 } from "./types/TableSchema.mjs";
 import type {
@@ -42,19 +43,19 @@ import { partitionByKey } from "./util/partitionByKey.mjs";
 import { rsqlExpressionToFilterFn } from "./util/rsqlExpressionToFilterFn.mjs";
 import type { PreparedMutation } from "./types/PreparedStatement.mjs";
 
-export class Table<T extends TableSchemaBase>
-	implements ReadableTable<T>, WritableTable<T>
-{
+export class Table<T extends TableSchemaBase> {
+	// implements ReadableTable<T>, WritableTable<T>
 	constructor(
-		private tableSchema: T,
+		private tableRef: TableRef<T>,
 		storage: Storage<T>,
 	) {
 		this.storage = storage;
 
 		this.preparedInsertRow = this.storage.prepareMutation<Row<T>>(
 			mkInsert(
+				this.tableRef,
 				Object.fromEntries(
-					Object.entries(this.tableSchema.columns).map(
+					Object.entries(this.tableRef.schema.columns).map(
 						([col]) =>
 							[
 								col,
@@ -66,7 +67,8 @@ export class Table<T extends TableSchemaBase>
 		);
 		this.preparedDeleteRow = this.storage.prepareMutation<PrimaryKeyRecord<T>>(
 			mkDelete(
-				mkPkRecords(this.tableSchema, (key: PrimaryKeyRecord<T>) => key),
+				this.tableRef,
+				mkPkRecords(this.tableRef.schema, (key: PrimaryKeyRecord<T>) => key),
 			),
 		);
 	}
@@ -91,6 +93,7 @@ export class Table<T extends TableSchemaBase>
 		};
 		const preparedUpdateRow = this.storage.prepareMutation<Context>(
 			mkUpdate(
+				this.tableRef,
 				Object.fromEntries(
 					Object.entries(changes).map(
 						([col]) =>
@@ -102,7 +105,10 @@ export class Table<T extends TableSchemaBase>
 							] as const,
 					),
 				) as Record<keyof Row<T>, Parameter>,
-				mkPkRecords<T, Context>(this.tableSchema, (ctx: Context) => ctx.key),
+				mkPkRecords<T, Context>(
+					this.tableRef.schema,
+					(ctx: Context) => ctx.key,
+				),
 			),
 		);
 		preparedUpdateRow({ key, changes: changes });
@@ -114,7 +120,7 @@ export class Table<T extends TableSchemaBase>
 	}
 
 	findUnique(key: PrimaryKeyRecord<T>): Dynamic<Row<T> | null, void> {
-		const keyTuple = this.tableSchema.primaryKey.map(
+		const keyTuple = this.tableRef.schema.primaryKey.map(
 			(pk: PrimaryKey<T>[number]) => key[pk],
 		) as unknown as PrimaryKeyTuple<T>;
 
@@ -216,15 +222,15 @@ export class Table<T extends TableSchemaBase>
 	): PrimaryKeyTuple<T> {
 		switch (event.kind) {
 			case "insert":
-				return this.tableSchema.primaryKey.map(
+				return this.tableRef.schema.primaryKey.map(
 					(pk: PrimaryKey<T>[number]) => event.row[pk],
 				) as unknown as PrimaryKeyTuple<T>;
 			case "update":
-				return this.tableSchema.primaryKey.map(
+				return this.tableRef.schema.primaryKey.map(
 					(pk: PrimaryKey<T>[number]) => event.key[pk],
 				) as unknown as PrimaryKeyTuple<T>;
 			case "delete":
-				return this.tableSchema.primaryKey.map(
+				return this.tableRef.schema.primaryKey.map(
 					(pk: PrimaryKey<T>[number]) => event.key[pk],
 				) as unknown as PrimaryKeyTuple<T>;
 		}
@@ -235,7 +241,7 @@ export class Table<T extends TableSchemaBase>
 		if (cacheRow !== undefined) return cacheRow;
 		return this.storage.findUnique(
 			Object.fromEntries(
-				this.tableSchema.primaryKey.map((pk, i) => [pk, key[i]] as const),
+				this.tableRef.schema.primaryKey.map((pk, i) => [pk, key[i]] as const),
 			) as unknown as PrimaryKeyRecord<T>,
 		);
 	}

@@ -39,6 +39,7 @@ export type Count<
 
 export type Insert<Table extends TableSchemaBase = TableSchemaBase> = {
 	kind: "insert";
+	into: TableRef<Table>;
 	values: Record<keyof Row<Table>, Parameterizable>;
 	onConflict?: {
 		columns: (keyof Row<Table>)[];
@@ -51,12 +52,14 @@ export type Insert<Table extends TableSchemaBase = TableSchemaBase> = {
 
 export type Update<Table extends TableSchemaBase = TableSchemaBase> = {
 	kind: "update";
+	into: TableRef<Table>;
 	set: Record<UpdatableColumnName<Table>, Parameterizable>;
 	key: Record<PrimaryKey<Table>[number], Parameterizable>;
 };
 
 export type Delete<Table extends TableSchemaBase = TableSchemaBase> = {
 	kind: "delete";
+	from: TableRef<Table>;
 	key: Record<PrimaryKey<Table>[number], Parameterizable>;
 };
 

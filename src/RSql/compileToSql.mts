@@ -73,7 +73,6 @@ export function* renderTableRefToSql<TableSchema extends TableSchemaBase>(
 	return table.name;
 }
 export function* renderStatementToSql<TableSchema extends TableSchemaBase>(
-	table: TableRef<TableSchema>,
 	sqlAst: Statement<TableSchema>,
 ): Generator<Parameterizable, string> {
 	switch (sqlAst.kind) {
@@ -88,7 +87,7 @@ export function* renderStatementToSql<TableSchema extends TableSchemaBase>(
 				}
 				selection = cols.join(", ");
 			}
-			let sql = `SELECT ${selection} FROM (${yield* renderTableRefToSql(table)})`;
+			let sql = `SELECT ${selection} FROM (${yield* renderTableRefToSql(sqlAst.from)})`;
 			let paramCount = 0;
 			if (sqlAst.where) {
 				const whereSql = yield* renderExpressionToSql(sqlAst.where);
@@ -105,7 +104,7 @@ export function* renderStatementToSql<TableSchema extends TableSchemaBase>(
 			return sql;
 		}
 		case "count": {
-			let sql = `SELECT COUNT(*) FROM (${yield* renderTableRefToSql(table)})`;
+			let sql = `SELECT COUNT(*) FROM (${yield* renderTableRefToSql(sqlAst.from)})`;
 			if (sqlAst.where) {
 				const whereSql = yield* renderExpressionToSql(sqlAst.where);
 				sql += ` WHERE ${whereSql}`;
@@ -116,7 +115,7 @@ export function* renderStatementToSql<TableSchema extends TableSchemaBase>(
 			const keys: (keyof Row<TableSchemaBase>)[] = Object.keys(
 				sqlAst.values,
 			) as (keyof Row<TableSchemaBase>)[];
-			let sql = `INSERT INTO ${yield* renderTableRefToSql(table)} (${keys.join(", ")}) VALUES (`;
+			let sql = `INSERT INTO ${yield* renderTableRefToSql(sqlAst.into)} (${keys.join(", ")}) VALUES (`;
 			const placeholders: string[] = [];
 			for (const k of keys) {
 				placeholders.push(
@@ -143,7 +142,7 @@ export function* renderStatementToSql<TableSchema extends TableSchemaBase>(
 			const keys = Object.keys(
 				sqlAst.set,
 			) as UpdatableColumnName<TableSchema>[];
-			let sql = `UPDATE ${yield* renderTableRefToSql(table)} SET `;
+			let sql = `UPDATE ${yield* renderTableRefToSql(sqlAst.into)} SET `;
 			const setClauses: string[] = [];
 			for (const k of keys) {
 				setClauses.push(`${k} = ?`);
@@ -161,7 +160,7 @@ export function* renderStatementToSql<TableSchema extends TableSchemaBase>(
 			return `${sql} WHERE ${where.join(" AND ")}`;
 		}
 		case "delete": {
-			const sql = `DELETE FROM ${yield* renderTableRefToSql(table)}`;
+			const sql = `DELETE FROM ${yield* renderTableRefToSql(sqlAst.from)}`;
 			const where: string[] = [];
 			for (const [k, v] of Object.entries(sqlAst.key)) {
 				const whereSql = yield* renderExpressionToSql(v as Parameterizable);
@@ -195,11 +194,8 @@ export function compileExpressionToSql<
 export function compileStatementToSql<
 	TableSchema extends TableSchemaBase,
 	Context,
->(
-	table: TableRef<TableSchema>,
-	sqlAst: Statement<TableSchema>,
-): CompiledQuery<Context> {
-	const gen = renderStatementToSql(table, sqlAst);
+>(sqlAst: Statement<TableSchema>): CompiledQuery<Context> {
+	const gen = renderStatementToSql(sqlAst);
 	const params: Parameterizable[] = [];
 	let next = gen.next();
 	while (!next.done) {
