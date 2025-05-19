@@ -3,6 +3,7 @@ import type {
 	PrimaryKey,
 	PrimaryKeyRecord,
 	Row,
+	TableRef,
 	TableSchemaBase,
 	UpdatableColumnName,
 } from "../types/TableSchema.mjs";
@@ -21,6 +22,7 @@ export type Select<
 > = {
 	kind: "select";
 	columns: "*" | Expression<Table>[];
+	from: TableRef<Table>;
 	where?: Expression<Table>;
 	orderBy?: OrderBy[];
 	limit?: Parameterizable;

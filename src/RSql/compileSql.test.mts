@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Expression, Tuple } from "./Expression.mjs";
-import type { Delete, Statement, Update } from "./RSql.mjs";
+import type { Delete, Select, Statement, Update } from "./RSql.mjs";
 import {
 	compileExpressionToSql,
 	compileStatementToSql,
 } from "./compileToSql.mjs";
+import type { TableRef } from "../types/TableSchema.mjs";
 
 type Table = {
 	name: string;
@@ -16,7 +17,18 @@ type Table = {
 };
 
 describe("compileSql", () => {
-	const table = "dummy";
+	const table: TableRef<Table> = {
+		kind: "base",
+		name: "dummy",
+		schema: {
+			name: "dummy",
+			columns: {
+				foo: { kind: "number" },
+				bar: { kind: "string" },
+			},
+			primaryKey: ["foo"],
+		},
+	};
 	it("renders simple column expression with compileSqlExpression", () => {
 		const expr: Expression<Table> = { kind: "column", name: "foo" };
 
@@ -36,8 +48,9 @@ describe("compileSql", () => {
 	});
 
 	it("renders tuple expression with compileSql", () => {
-		const expr: Statement = {
+		const expr: Select<Table> = {
 			kind: "select",
+			from: table,
 			columns: "*",
 			where: {
 				kind: "tuple",
@@ -55,8 +68,9 @@ describe("compileSql", () => {
 	});
 
 	it("renders binary operation expression with compileSql", () => {
-		const expr: Statement = {
+		const expr: Select<Table> = {
 			kind: "select",
+			from: table,
 			columns: "*",
 			where: {
 				kind: "binOp",

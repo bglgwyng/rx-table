@@ -1,6 +1,7 @@
 import assert from "assert";
 import type {
 	Row,
+	TableRef,
 	TableSchemaBase,
 	UpdatableColumnName,
 } from "../types/TableSchema.mjs";
@@ -65,9 +66,15 @@ function* renderExpressionToSql(
 	assert.fail(`Unsupported expression type in renderExpression ${expr.kind}`);
 }
 
-export function* renderStatementToSql<Table extends TableSchemaBase>(
-	table: string,
-	sqlAst: Statement<Table>,
+// biome-ignore lint/correctness/useYield: <explanation>
+export function* renderTableRefToSql<TableSchema extends TableSchemaBase>(
+	table: TableRef<TableSchema>,
+): Generator<Parameterizable, string> {
+	return table.name;
+}
+export function* renderStatementToSql<TableSchema extends TableSchemaBase>(
+	table: TableRef<TableSchema>,
+	sqlAst: Statement<TableSchema>,
 ): Generator<Parameterizable, string> {
 	switch (sqlAst.kind) {
 		case "select": {
@@ -81,7 +88,7 @@ export function* renderStatementToSql<Table extends TableSchemaBase>(
 				}
 				selection = cols.join(", ");
 			}
-			let sql = `SELECT ${selection} FROM (${table})`;
+			let sql = `SELECT ${selection} FROM (${yield* renderTableRefToSql(table)})`;
 			let paramCount = 0;
 			if (sqlAst.where) {
 				const whereSql = yield* renderExpressionToSql(sqlAst.where);
@@ -98,7 +105,7 @@ export function* renderStatementToSql<Table extends TableSchemaBase>(
 			return sql;
 		}
 		case "count": {
-			let sql = `SELECT COUNT(*) FROM (${table})`;
+			let sql = `SELECT COUNT(*) FROM (${yield* renderTableRefToSql(table)})`;
 			if (sqlAst.where) {
 				const whereSql = yield* renderExpressionToSql(sqlAst.where);
 				sql += ` WHERE ${whereSql}`;
@@ -109,7 +116,7 @@ export function* renderStatementToSql<Table extends TableSchemaBase>(
 			const keys: (keyof Row<TableSchemaBase>)[] = Object.keys(
 				sqlAst.values,
 			) as (keyof Row<TableSchemaBase>)[];
-			let sql = `INSERT INTO ${table} (${keys.join(", ")}) VALUES (`;
+			let sql = `INSERT INTO ${yield* renderTableRefToSql(table)} (${keys.join(", ")}) VALUES (`;
 			const placeholders: string[] = [];
 			for (const k of keys) {
 				placeholders.push(
@@ -133,15 +140,17 @@ export function* renderStatementToSql<Table extends TableSchemaBase>(
 			return sql;
 		}
 		case "update": {
-			const keys = Object.keys(sqlAst.set) as UpdatableColumnName<Table>[];
-			let sql = `UPDATE ${table} SET `;
+			const keys = Object.keys(
+				sqlAst.set,
+			) as UpdatableColumnName<TableSchema>[];
+			let sql = `UPDATE ${yield* renderTableRefToSql(table)} SET `;
 			const setClauses: string[] = [];
 			for (const k of keys) {
 				setClauses.push(`${k} = ?`);
 			}
 			sql += setClauses.join(", ");
 			for (const k of keys) {
-				yield sqlAst.set[k as UpdatableColumnName<Table>];
+				yield sqlAst.set[k as UpdatableColumnName<TableSchema>];
 			}
 
 			const where: string[] = [];
@@ -152,7 +161,7 @@ export function* renderStatementToSql<Table extends TableSchemaBase>(
 			return `${sql} WHERE ${where.join(" AND ")}`;
 		}
 		case "delete": {
-			const sql = `DELETE FROM ${table}`;
+			const sql = `DELETE FROM ${yield* renderTableRefToSql(table)}`;
 			const where: string[] = [];
 			for (const [k, v] of Object.entries(sqlAst.key)) {
 				const whereSql = yield* renderExpressionToSql(v as Parameterizable);
@@ -161,7 +170,6 @@ export function* renderStatementToSql<Table extends TableSchemaBase>(
 			return `${sql} WHERE ${where.join(" AND ")}`;
 		}
 	}
-	assert.fail(`Unsupported statement type in renderStatement ${sqlAst.kind}`);
 }
 
 export function compileExpressionToSql<
@@ -184,9 +192,12 @@ export function compileExpressionToSql<
 	];
 }
 
-export function compileStatementToSql<Table extends TableSchemaBase, Context>(
-	table: string,
-	sqlAst: Statement<Table>,
+export function compileStatementToSql<
+	TableSchema extends TableSchemaBase,
+	Context,
+>(
+	table: TableRef<TableSchema>,
+	sqlAst: Statement<TableSchema>,
 ): CompiledQuery<Context> {
 	const gen = renderStatementToSql(table, sqlAst);
 	const params: Parameterizable[] = [];

@@ -2,9 +2,9 @@ import Database from "better-sqlite3";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Page, PageInit } from "../../Page.mjs";
 import type { Expression } from "../../RSql/Expression.mjs";
-import type { Statement } from "../../RSql/RSql.mjs";
+import type { Select, Statement } from "../../RSql/RSql.mjs";
 import { compileStatementToSql } from "../../RSql/compileToSql.mjs";
-import type { Row } from "../../types/TableSchema.mjs";
+import type { Row, TableRef } from "../../types/TableSchema.mjs";
 import type { TableSchemaBase } from "../../types/TableSchema.mjs";
 import { rsqlExpressionToFilterFn } from "../../util/rsqlExpressionToFilterFn.mjs";
 import { BetterSqlite3Storage } from "./BetterSqlite3Storage.mjs";
@@ -22,7 +22,11 @@ const userSchema = {
 type UserTable = typeof userSchema;
 
 describe("SqliteStorage.findMany", () => {
-	const table = "users";
+	const table: TableRef<UserTable> = {
+		kind: "base",
+		name: "users",
+		schema: userSchema,
+	};
 	it("returns results in orderBy direction for before+last (backward) pagination (Relay spec)", () => {
 		const db = new Database(":memory:");
 		db.exec(
@@ -169,8 +173,9 @@ describe("SqliteStorage.findMany", () => {
 	});
 
 	it("should render tuple of constants and parameters", () => {
-		const expr: Statement = {
+		const expr: Select<UserTable> = {
 			kind: "select",
+			from: table,
 			columns: "*",
 			where: {
 				kind: "tuple",

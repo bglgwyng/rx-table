@@ -52,6 +52,8 @@ export function mkDeleteRow<T extends TableSchemaBase>(schema: T) {
 
 export function mkFindUnique<T extends TableSchemaBase>(schema: T) {
 	return mkSelect<T>(
+		// FIXME:
+		{ kind: "base", name: schema.name, schema },
 		Object.keys(schema.columns).map((pk) => mkColumn(pk)),
 		{
 			where: mkEq(

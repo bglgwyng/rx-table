@@ -2,6 +2,7 @@ import type {
 	PrimaryKey,
 	PrimaryKeyRecord,
 	Row,
+	TableRef,
 	TableSchemaBase,
 	UpdatableColumnName,
 } from "../types/TableSchema.mjs";
@@ -55,15 +56,17 @@ export function mkDelete<Table extends TableSchemaBase>(
 }
 
 export function mkSelect<Table extends TableSchemaBase>(
+	from: TableRef<Table>,
 	columns: "*" | Expression<Table>[],
 	options?: {
 		where?: Expression<Table>;
 		orderBy?: OrderBy[];
 		limit?: Parameterizable;
 	},
-): Select<TableSchemaBase> {
+): Select<Table> {
 	return {
 		kind: "select",
+		from,
 		columns,
 		...options,
 	};

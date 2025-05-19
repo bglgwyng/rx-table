@@ -10,7 +10,7 @@ import {
 	mkSelect,
 	mkTuple,
 } from "./RSql/mks.mjs";
-import type { PrimaryKeyRecord, Row } from "./types/TableSchema.mjs";
+import type { PrimaryKeyRecord, Row, TableRef } from "./types/TableSchema.mjs";
 import type { TableSchemaBase } from "./types/TableSchema.mjs";
 
 export type PageDelta<T extends TableSchemaBase> = (
@@ -107,20 +107,20 @@ export type PreparedQueriesForFindMany<
 };
 
 export function compileFindMany<
-	Table extends TableSchemaBase,
-	Cursor extends PrimaryKeyRecord<Table>,
+	TableSchema extends TableSchemaBase,
+	Cursor extends PrimaryKeyRecord<TableSchema>,
 >(
-	table: Table,
+	table: TableRef<TableSchema>,
 	pageInput: {
-		filter?: Expression<Table>;
+		filter?: Expression<TableSchema>;
 		orderBy: readonly {
 			column: string & keyof Cursor;
 			direction: "asc" | "desc";
 		}[];
 	},
-): PreparedQueriesForFindMany<Table, Cursor> {
+): PreparedQueriesForFindMany<TableSchema, Cursor> {
 	assert(
-		table.primaryKey.every((pk) =>
+		table.schema.primaryKey.every((pk) =>
 			pageInput.orderBy.some((o) => o.column === pk),
 		),
 		"orderBy must include all primary key columns",
@@ -135,7 +135,7 @@ export function compileFindMany<
 
 	const mkCursorParams = <Context, _ = unknown>(
 		getCursor: (context: Context) => Cursor,
-	): Tuple<Table> => ({
+	): Tuple<TableSchema> => ({
 		kind: "tuple",
 		expressions: pageInput.orderBy.map((col) => ({
 			kind: "parameter",
@@ -148,37 +148,37 @@ export function compileFindMany<
 	const orderBy = pageInput.orderBy;
 
 	// for load: no cursor, orderBy as is
-	const loadHeadAst: Select<Table> = mkSelect(cursorCols, {
+	const loadHeadAst: Select<TableSchema> = mkSelect(table, cursorCols, {
 		where: filter,
 		orderBy: orderBy.map((o) => ({
 			column: o.column,
 			direction: o.direction,
 		})),
 		limit: mkParameter(
-			(context: PageParameter<Table, Cursor, false>) => context.limit,
+			(context: PageParameter<TableSchema, Cursor, false>) => context.limit,
 		),
 	});
 
 	// for load: no cursor, orderBy as is
-	const loadTailAst: Select<Table> = mkSelect(cursorCols, {
+	const loadTailAst: Select<TableSchema> = mkSelect(table, cursorCols, {
 		where: filter,
 		orderBy: orderBy.map((o) => ({
 			column: o.column,
 			direction: invertDirection(o.direction),
 		})),
 		limit: mkParameter(
-			(context: PageParameter<Table, Cursor, false>) => context.limit,
+			(context: PageParameter<TableSchema, Cursor, false>) => context.limit,
 		),
 	});
 
 	// for loadMore: after cursor, forward order
-	const loadNextAst: Select<Table> = mkSelect(cursorCols, {
+	const loadNextAst: Select<TableSchema> = mkSelect(table, cursorCols, {
 		where: ands([
 			...(filter ? [filter] : []),
 			mkGT(
 				cursorAsTuple,
 				mkCursorParams(
-					(context: PageParameter<Table, Cursor, true>) => context.cursor,
+					(context: PageParameter<TableSchema, Cursor, true>) => context.cursor,
 				),
 			),
 		]),
@@ -187,18 +187,18 @@ export function compileFindMany<
 			direction: o.direction,
 		})),
 		limit: mkParameter(
-			(context: PageParameter<Table, Cursor, true>) => context.limit,
+			(context: PageParameter<TableSchema, Cursor, true>) => context.limit,
 		),
 	});
 
 	// for loadPrevious: before cursor, reverse order
-	const loadPreviousAst: Select<Table> = mkSelect(cursorCols, {
+	const loadPreviousAst: Select<TableSchema> = mkSelect(table, cursorCols, {
 		where: ands([
 			...(filter ? [filter] : []),
 			mkLT(
 				cursorAsTuple,
 				mkCursorParams(
-					(context: PageParameter<Table, Cursor, true>) => context.cursor,
+					(context: PageParameter<TableSchema, Cursor, true>) => context.cursor,
 				),
 			),
 		]),
@@ -207,14 +207,14 @@ export function compileFindMany<
 			direction: invertDirection(o.direction),
 		})),
 		limit: mkParameter(
-			(context: PageParameter<Table, Cursor, true>) => context.limit,
+			(context: PageParameter<TableSchema, Cursor, true>) => context.limit,
 		),
 	});
 
-	const totalCountAst: Count<Table> = mkCount(filter);
+	const totalCountAst: Count<TableSchema> = mkCount(filter);
 
 	// Count rows after the cursor (for forward pagination)
-	const countAfterAst: Count<Table> = mkCount(
+	const countAfterAst: Count<TableSchema> = mkCount(
 		ands([
 			...(filter ? [filter] : []),
 			mkGT(
@@ -225,7 +225,7 @@ export function compileFindMany<
 	);
 
 	// Count rows before the cursor (for backward pagination)
-	const countBeforeAst: Count<Table> = mkCount(
+	const countBeforeAst: Count<TableSchema> = mkCount(
 		ands([
 			...(filter ? [filter] : []),
 			mkLT(

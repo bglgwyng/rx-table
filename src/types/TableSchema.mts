@@ -76,3 +76,9 @@ export type TableEvent<T extends TableSchemaBase> =
 			kind: "delete";
 			key: PrimaryKeyRecord<T>;
 	  };
+
+export type TableRef<TableSchema extends TableSchemaBase> = {
+	kind: "base";
+	name: string;
+	schema: TableSchema;
+};

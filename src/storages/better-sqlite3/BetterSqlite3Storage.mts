@@ -31,6 +31,7 @@ import type {
 	PrimaryKey,
 	PrimaryKeyRecord,
 	Row,
+	TableRef,
 } from "../../types/TableSchema.mjs";
 import type { TableSchemaBase } from "../../types/TableSchema.mjs";
 import type {
@@ -40,11 +41,11 @@ import type {
 	PreparedQueryOne,
 } from "../../types/PreparedStatement.mjs";
 
-export class BetterSqlite3Storage<Table extends TableSchemaBase>
-	implements WritableStorage<Table>, ReadableStorage<Table>
+export class BetterSqlite3Storage<TableSchema extends TableSchemaBase>
+	implements WritableStorage<TableSchema>, ReadableStorage<TableSchema>
 {
 	constructor(
-		public readonly schema: Table,
+		public readonly schema: TableSchema,
 		public readonly database: Database,
 	) {
 		this.preparedInsert = this.prepareMutation(mkInsertRow(this.schema));
@@ -53,8 +54,8 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 		this.preparedFindUnique = this.prepareQueryOne(mkFindUnique(this.schema));
 	}
 
-	get tableName() {
-		return this.schema.name;
+	get table(): TableRef<TableSchema> {
+		return { kind: "base", name: this.schema.name, schema: this.schema };
 	}
 
 	get primaryKeys() {
@@ -62,39 +63,39 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 	}
 
 	prepareQueryOne<Context, Row>(
-		query: Select<Table>,
+		query: Select<TableSchema>,
 	): PreparedQueryOne<Context, Row> {
-		const [sql, getParams] = compileStatementToSql(this.tableName, query);
+		const [sql, getParams] = compileStatementToSql(this.table, query);
 		const stmt = this.database.prepare(sql);
 		return (context?: Context) =>
 			(stmt.get(...getParams(context)) as Row | undefined) ?? null;
 	}
 
 	prepareQueryAll<Context, Row>(
-		query: Select<Table>,
+		query: Select<TableSchema>,
 	): PreparedQueryAll<Context, Row> {
-		const [sql, getParams] = compileStatementToSql(this.tableName, query);
+		const [sql, getParams] = compileStatementToSql(this.table, query);
 		const stmt = this.database.prepare(sql);
 		return (context?: Context) => stmt.all(...getParams(context)) as Row[];
 	}
 
-	prepareCount<Context>(query: Count<Table>): PreparedCount<Context> {
-		const [sql, getParams] = compileStatementToSql(this.tableName, query);
+	prepareCount<Context>(query: Count<TableSchema>): PreparedCount<Context> {
+		const [sql, getParams] = compileStatementToSql(this.table, query);
 		const stmt = this.database.prepare(sql);
 		return (context?: Context) =>
 			(stmt.get(...getParams(context)) as { "COUNT(*)": number })["COUNT(*)"];
 	}
 
 	prepareMutation<Context>(
-		mutation: Insert<Table> | Update<Table> | Delete<Table>,
+		mutation: Insert<TableSchema> | Update<TableSchema> | Delete<TableSchema>,
 	): PreparedMutation<Context> {
-		const [sql, getParams] = compileStatementToSql(this.tableName, mutation);
+		const [sql, getParams] = compileStatementToSql(this.table, mutation);
 		const stmt = this.database.prepare(sql);
 
 		return (context?: Context) => stmt.run(...getParams(context));
 	}
 
-	mutate(mutation: Mutation<Table>): void {
+	mutate(mutation: Mutation<TableSchema>): void {
 		switch (mutation.type) {
 			case "insert":
 				this.insert(mutation.row);
@@ -113,7 +114,7 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 		}
 	}
 
-	mutateMany(mutations: Mutation<Table>[]): void {
+	mutateMany(mutations: Mutation<TableSchema>[]): void {
 		this.database.transaction(() => {
 			for (const m of mutations) {
 				this.mutate(m);
@@ -121,16 +122,19 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 		})();
 	}
 
-	insert(row: Row<Table>): void {
+	insert(row: Row<TableSchema>): void {
 		this.preparedInsert(row);
 	}
 
-	upsert(row: Row<Table>): void {
+	upsert(row: Row<TableSchema>): void {
 		this.preparedUpsert(row);
 	}
 
-	update(key: PrimaryKeyRecord<Table>, changes: Partial<Row<Table>>): void {
-		const columns = Object.keys(changes) as (keyof Row<Table>)[];
+	update(
+		key: PrimaryKeyRecord<TableSchema>,
+		changes: Partial<Row<TableSchema>>,
+	): void {
+		const columns = Object.keys(changes) as (keyof Row<TableSchema>)[];
 		if (columns.length === 0) return;
 
 		const set = Object.fromEntries(
@@ -138,46 +142,43 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 				col,
 				mkParameter(
 					(ctx: {
-						changes: Partial<Row<Table>>;
-						key: PrimaryKeyRecord<Table>;
+						changes: Partial<Row<TableSchema>>;
+						key: PrimaryKeyRecord<TableSchema>;
 					}) => ctx.changes[col],
 				),
 			]),
-		) as Record<keyof Row<Table>, Parameter>;
+		) as Record<keyof Row<TableSchema>, Parameter>;
 
 		const pkParams = mkPkRecords(
 			this.schema,
-			({ key }: { key: PrimaryKeyRecord<Table> }) => key,
+			({ key }: { key: PrimaryKeyRecord<TableSchema> }) => key,
 		);
-		const updateAst: Update<Table> = mkUpdate(set, pkParams);
+		const updateAst: Update<TableSchema> = mkUpdate(set, pkParams);
 
-		const [sql, getParamsRaw] = compileStatementToSql(
-			this.tableName,
-			updateAst,
-		);
+		const [sql, getParamsRaw] = compileStatementToSql(this.table, updateAst);
 
 		const stmt = this.database.prepare(sql);
 		stmt.run(...getParamsRaw({ changes, key }));
 	}
 
-	delete(key: PrimaryKeyRecord<Table>): void {
+	delete(key: PrimaryKeyRecord<TableSchema>): void {
 		this.preparedDelete(key);
 	}
 
-	findUnique(key: PrimaryKeyRecord<Table>): Row<Table> | null {
+	findUnique(key: PrimaryKeyRecord<TableSchema>): Row<TableSchema> | null {
 		const row = this.preparedFindUnique(key);
 
-		return row === undefined ? null : (row as Row<Table>);
+		return row === undefined ? null : (row as Row<TableSchema>);
 	}
 
-	findMany<Cursor extends PrimaryKeyRecord<Table>>(
-		pageInput: PageInit<Table, Cursor>,
-	): Page<Table, Cursor> {
+	findMany<Cursor extends PrimaryKeyRecord<TableSchema>>(
+		pageInput: PageInit<TableSchema, Cursor>,
+	): Page<TableSchema, Cursor> {
 		const { loadForward, loadBackward, countAfter, countBefore, countTotal } =
 			this.prepareFindMany<Cursor>({
 				filter: pageInput.filter,
 				orderBy: pageInput.orderBy.map(({ column, direction }) => ({
-					column: column as PrimaryKey<Table>[number],
+					column: column as PrimaryKey<TableSchema>[number],
 					direction,
 				})),
 			});
@@ -185,14 +186,14 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 		let rows: Cursor[] = [];
 
 		if (pageInput.kind === "forward") {
-			const forwardInput: ForwardPageInit<Table, Cursor> = {
+			const forwardInput: ForwardPageInit<TableSchema, Cursor> = {
 				kind: "forward",
 				first: pageInput.first,
 				after: pageInput.after,
 			};
 			rows = loadForward(forwardInput) as Cursor[];
 		} else {
-			const backwardInput: BackwardPageInit<Table, Cursor> = {
+			const backwardInput: BackwardPageInit<TableSchema, Cursor> = {
 				kind: "backward",
 				last: pageInput.last,
 				before: pageInput.before,
@@ -222,7 +223,7 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 				? pageInput.before === undefined
 					? 0
 					: rows.length > 0
-						? countAfter(rows.at(-1)!, true)
+						? countAfter(rows.at(-1)!)
 						: rowCount
 				: rows.length > 0
 					? countAfter(rows.at(-1)!)
@@ -240,10 +241,10 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 		};
 	}
 
-	prepareFindMany<Cursor extends PrimaryKeyRecord<Table>>(options: {
-		filter?: Expression<Table>;
+	prepareFindMany<Cursor extends PrimaryKeyRecord<TableSchema>>(options: {
+		filter?: Expression<TableSchema>;
 		orderBy: readonly {
-			column: PrimaryKey<Table>[number];
+			column: PrimaryKey<TableSchema>[number];
 			direction: "asc" | "desc";
 		}[];
 	}) {
@@ -256,20 +257,20 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 			countTotal,
 			countAfter,
 			countBefore,
-		} = compileFindMany(this.schema, {
+		} = compileFindMany(this.table, {
 			filter,
 			orderBy,
 		});
 
 		return {
-			loadForward: (pageInput: ForwardPageInit<Table, Cursor>) =>
+			loadForward: (pageInput: ForwardPageInit<TableSchema, Cursor>) =>
 				pageInput.after === undefined
 					? this.prepareQueryAll(loadFirst)({ limit: pageInput.first })
 					: this.prepareQueryAll(loadNext)({
 							cursor: pageInput.after,
 							limit: pageInput.first,
 						}),
-			loadBackward: (pageInput: BackwardPageInit<Table, Cursor>) =>
+			loadBackward: (pageInput: BackwardPageInit<TableSchema, Cursor>) =>
 				pageInput.before === undefined
 					? this.prepareQueryAll(loadLast)({ limit: pageInput.last })
 					: this.prepareQueryAll(loadPrev)({
@@ -284,11 +285,11 @@ export class BetterSqlite3Storage<Table extends TableSchemaBase>
 		};
 	}
 
-	private preparedInsert: PreparedMutation<Row<Table>>;
-	private preparedUpsert: PreparedMutation<Row<Table>>;
-	private preparedDelete: PreparedMutation<PrimaryKeyRecord<Table>>;
+	private preparedInsert: PreparedMutation<Row<TableSchema>>;
+	private preparedUpsert: PreparedMutation<Row<TableSchema>>;
+	private preparedDelete: PreparedMutation<PrimaryKeyRecord<TableSchema>>;
 	private preparedFindUnique: PreparedQueryOne<
-		PrimaryKeyRecord<Table>,
-		Row<Table>
+		PrimaryKeyRecord<TableSchema>,
+		Row<TableSchema>
 	>;
 }
