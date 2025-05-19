@@ -73,10 +73,12 @@ export function mkSelect<Table extends TableSchemaBase>(
 }
 
 export function mkCount<Table extends TableSchemaBase>(
+	from: TableRef<Table>,
 	where?: Expression<Table>,
-): Count<TableSchemaBase> {
+): Count<Table> {
 	return {
 		kind: "count",
+		from,
 		where,
 	};
 }

@@ -211,10 +211,11 @@ export function compileFindMany<
 		),
 	});
 
-	const totalCountAst: Count<TableSchema> = mkCount(filter);
+	const totalCountAst: Count<TableSchema> = mkCount(table, filter);
 
 	// Count rows after the cursor (for forward pagination)
 	const countAfterAst: Count<TableSchema> = mkCount(
+		table,
 		ands([
 			...(filter ? [filter] : []),
 			mkGT(
@@ -226,6 +227,7 @@ export function compileFindMany<
 
 	// Count rows before the cursor (for backward pagination)
 	const countBeforeAst: Count<TableSchema> = mkCount(
+		table,
 		ands([
 			...(filter ? [filter] : []),
 			mkLT(

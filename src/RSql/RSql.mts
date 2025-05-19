@@ -33,6 +33,7 @@ export type Count<
 	Context = unknown,
 > = {
 	kind: "count";
+	from: TableRef<Table>;
 	where?: Expression<Table>;
 };
 
