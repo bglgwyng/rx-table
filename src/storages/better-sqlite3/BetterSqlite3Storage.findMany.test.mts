@@ -2,8 +2,11 @@ import Database from "better-sqlite3";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Page, PageInit } from "../../Page.mjs";
 import type { Expression } from "../../RSql/Expression.mjs";
-import type { Select, Statement } from "../../RSql/RSql.mjs";
-import { compileStatementToSql } from "../../RSql/compileToSql.mjs";
+import type { Select } from "../../RSql/RSql.mjs";
+import {
+	compileExpressionToSql,
+	compileQueryToSql,
+} from "../../RSql/compileToSql.mjs";
 import type { Row, TableRef } from "../../types/TableSchema.mjs";
 import type { TableSchemaBase } from "../../types/TableSchema.mjs";
 import { rsqlExpressionToFilterFn } from "../../util/rsqlExpressionToFilterFn.mjs";
@@ -186,7 +189,7 @@ describe("SqliteStorage.findMany", () => {
 				],
 			},
 		};
-		const [sql, getParams] = compileStatementToSql(expr);
+		const [sql, getParams] = compileQueryToSql(expr);
 		const params = getParams({ name: "hello" });
 		expect(sql).toBe("SELECT * FROM (users) WHERE (?, ?, ?)");
 		expect(params.length).toBe(3);

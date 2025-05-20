@@ -14,7 +14,10 @@ import type {
 	Select,
 	Update,
 } from "../../RSql/RSql.mjs";
-import { compileStatementToSql } from "../../RSql/compileToSql.mjs";
+import {
+	compileMutationToSql,
+	compileQueryToSql,
+} from "../../RSql/compileToSql.mjs";
 import {
 	mkDeleteRow,
 	mkFindUnique,
@@ -28,18 +31,18 @@ import type {
 	WritableStorage,
 } from "../../Storage.mjs";
 import type {
+	PreparedCount,
+	PreparedMutation,
+	PreparedQueryAll,
+	PreparedQueryOne,
+} from "../../types/PreparedStatement.mjs";
+import type {
 	PrimaryKey,
 	PrimaryKeyRecord,
 	Row,
 	TableRef,
 } from "../../types/TableSchema.mjs";
 import type { TableSchemaBase } from "../../types/TableSchema.mjs";
-import type {
-	PreparedCount,
-	PreparedMutation,
-	PreparedQueryAll,
-	PreparedQueryOne,
-} from "../../types/PreparedStatement.mjs";
 
 export class BetterSqlite3Storage<TableSchema extends TableSchemaBase>
 	implements WritableStorage<TableSchema>, ReadableStorage<TableSchema>
@@ -65,7 +68,7 @@ export class BetterSqlite3Storage<TableSchema extends TableSchemaBase>
 	prepareQueryOne<Context, Row>(
 		query: Select<TableSchema>,
 	): PreparedQueryOne<Context, Row> {
-		const [sql, getParams] = compileStatementToSql(query);
+		const [sql, getParams] = compileQueryToSql(query);
 		const stmt = this.database.prepare(sql);
 		return (context?: Context) =>
 			(stmt.get(...getParams(context)) as Row | undefined) ?? null;
@@ -74,13 +77,13 @@ export class BetterSqlite3Storage<TableSchema extends TableSchemaBase>
 	prepareQueryAll<Context, Row>(
 		query: Select<TableSchema>,
 	): PreparedQueryAll<Context, Row> {
-		const [sql, getParams] = compileStatementToSql(query);
+		const [sql, getParams] = compileQueryToSql(query);
 		const stmt = this.database.prepare(sql);
 		return (context?: Context) => stmt.all(...getParams(context)) as Row[];
 	}
 
 	prepareCount<Context>(query: Count<TableSchema>): PreparedCount<Context> {
-		const [sql, getParams] = compileStatementToSql(query);
+		const [sql, getParams] = compileQueryToSql(query);
 		const stmt = this.database.prepare(sql);
 		return (context?: Context) =>
 			(stmt.get(...getParams(context)) as { "COUNT(*)": number })["COUNT(*)"];
@@ -89,7 +92,7 @@ export class BetterSqlite3Storage<TableSchema extends TableSchemaBase>
 	prepareMutation<Context>(
 		mutation: Insert<TableSchema> | Update<TableSchema> | Delete<TableSchema>,
 	): PreparedMutation<Context> {
-		const [sql, getParams] = compileStatementToSql(mutation);
+		const [sql, getParams] = compileMutationToSql(mutation);
 		const stmt = this.database.prepare(sql);
 
 		return (context?: Context) => stmt.run(...getParams(context));
@@ -155,7 +158,7 @@ export class BetterSqlite3Storage<TableSchema extends TableSchemaBase>
 		);
 		const updateAst: Update<TableSchema> = mkUpdate(this.table, set, pkParams);
 
-		const [sql, getParamsRaw] = compileStatementToSql(updateAst);
+		const [sql, getParamsRaw] = compileMutationToSql(updateAst);
 
 		const stmt = this.database.prepare(sql);
 		stmt.run(...getParamsRaw({ changes, key }));

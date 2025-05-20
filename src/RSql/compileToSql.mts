@@ -10,7 +10,7 @@ import {
 	type Parameterizable,
 	isParameterizable,
 } from "./Expression.mjs";
-import type { Statement } from "./RSql.mjs";
+import type { Mutation, Query } from "./RSql.mjs";
 
 export type CompiledQuery<Context> = readonly [
 	sql: string,
@@ -72,8 +72,8 @@ export function* renderTableRefToSql<TableSchema extends TableSchemaBase>(
 ): Generator<Parameterizable, string> {
 	return table.name;
 }
-export function* renderStatementToSql<TableSchema extends TableSchemaBase>(
-	sqlAst: Statement<TableSchema>,
+export function* renderQueryToSql<TableSchema extends TableSchemaBase>(
+	sqlAst: Query<TableSchema>,
 ): Generator<Parameterizable, string> {
 	switch (sqlAst.kind) {
 		case "select": {
@@ -111,6 +111,13 @@ export function* renderStatementToSql<TableSchema extends TableSchemaBase>(
 			}
 			return sql;
 		}
+	}
+}
+
+export function* renderMutationToSql<TableSchema extends TableSchemaBase>(
+	sqlAst: Mutation<TableSchema>,
+): Generator<Parameterizable, string> {
+	switch (sqlAst.kind) {
 		case "insert": {
 			const keys: (keyof Row<TableSchemaBase>)[] = Object.keys(
 				sqlAst.values,
@@ -191,11 +198,31 @@ export function compileExpressionToSql<
 	];
 }
 
-export function compileStatementToSql<
+export function compileQueryToSql<TableSchema extends TableSchemaBase, Context>(
+	sqlAst: Query<TableSchema>,
+): CompiledQuery<Context> {
+	const gen = renderQueryToSql(sqlAst);
+	const params: Parameterizable[] = [];
+	let next = gen.next();
+	while (!next.done) {
+		params.push(next.value);
+		next = gen.next("?");
+	}
+	const sql = next.value;
+	return [
+		sql,
+		(context) =>
+			params.map((p) =>
+				p.kind === "constant" ? p.value : p.getValue(context),
+			),
+	];
+}
+
+export function compileMutationToSql<
 	TableSchema extends TableSchemaBase,
 	Context,
->(sqlAst: Statement<TableSchema>): CompiledQuery<Context> {
-	const gen = renderStatementToSql(sqlAst);
+>(sqlAst: Mutation<TableSchema>): CompiledQuery<Context> {
+	const gen = renderMutationToSql(sqlAst);
 	const params: Parameterizable[] = [];
 	let next = gen.next();
 	while (!next.done) {

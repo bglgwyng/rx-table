@@ -26,6 +26,7 @@ import {
 } from "./RSql/mks.mjs";
 import type { Storage } from "./Storage.mjs";
 import { type Dynamic, createDynamic } from "./core/Dynamic.mjs";
+import type { PreparedMutation } from "./types/PreparedStatement.mjs";
 import type {
 	ReadableTable,
 	TableEvent,
@@ -41,7 +42,6 @@ import type {
 import type { TableSchemaBase } from "./types/TableSchema.mjs";
 import { partitionByKey } from "./util/partitionByKey.mjs";
 import { rsqlExpressionToFilterFn } from "./util/rsqlExpressionToFilterFn.mjs";
-import type { PreparedMutation } from "./types/PreparedStatement.mjs";
 
 export class Table<T extends TableSchemaBase> {
 	// implements ReadableTable<T>, WritableTable<T>

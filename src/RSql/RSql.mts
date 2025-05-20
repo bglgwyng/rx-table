@@ -9,9 +9,11 @@ import type {
 } from "../types/TableSchema.mjs";
 import type { Expression, Parameterizable } from "./Expression.mjs";
 
-export type Statement<Table extends TableSchemaBase = TableSchemaBase> =
+export type Query<Table extends TableSchemaBase = TableSchemaBase> =
 	| Select<Table>
-	| Count<Table>
+	| Count<Table>;
+
+export type Mutation<Table extends TableSchemaBase = TableSchemaBase> =
 	| Insert<Table>
 	| Update<Table>
 	| Delete<Table>;
