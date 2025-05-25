@@ -12,7 +12,7 @@ const schema = {
 			id: { kind: "number" },
 			name: { kind: "string" },
 		},
-		primaryKey: ["id"],
+		primaryKey: ["id"] as const,
 	} satisfies TableSchemaBase,
 };
 type UserTable = (typeof schema)["User"];
@@ -32,7 +32,7 @@ describe("Table", () => {
 			createSqliteStorage(),
 			"User",
 		);
-		const table = new Table(
+		const table = new Table<UserTable>(
 			{
 				kind: "base",
 				name: "User",

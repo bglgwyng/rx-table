@@ -1,38 +1,10 @@
 import type { Database } from "better-sqlite3";
-import {
-	type BackwardPageInit,
-	type ForwardPageInit,
-	type Page,
-	type PageInit,
-	compileFindMany,
-} from "../../Page.mjs";
-import type { Expression, Parameter } from "../../RSql/Expression.mjs";
-import type {
-	Count,
-	Delete,
-	Insert,
-	Mutation,
-	Select,
-	Update,
-} from "../../RSql/RSql.mjs";
+import type { Count, Mutation, Select } from "../../RSql/RSql.mjs";
 import {
 	compileMutationToSql,
 	compileQueryToSql,
 } from "../../RSql/compileToSql.mjs";
-import {
-	mkDeleteRow,
-	mkFindUnique,
-	mkInsertRow,
-	mkUpsertRow,
-} from "../../RSql/mkHelpers.mjs";
-import { mkParameter, mkPkRecords, mkUpdate } from "../../RSql/mks.mjs";
-import type { ReadableStorage, WritableStorage } from "../../Storage.mjs";
-import type {
-	PrimaryKey,
-	PrimaryKeyRecord,
-	Row,
-	TableRef,
-} from "../../types/TableSchema.mjs";
+import type { Row, TableRef } from "../../types/TableSchema.mjs";
 import type { TableSchemaBase } from "../../types/TableSchema.mjs";
 import type {
 	PreparedCount,
@@ -40,10 +12,11 @@ import type {
 	PreparedQueryAll,
 	PreparedQueryOne,
 } from "../../types/PreparedStatement.mjs";
+import type { Storage } from "../../Storage.mjs";
 
 export class BetterSqlite3Storage<
 	Schema extends Record<string, TableSchemaBase>,
-> implements WritableStorage<Schema>, ReadableStorage<Schema>
+> implements Storage<Schema>
 {
 	constructor(
 		public readonly schema: Schema,

@@ -53,7 +53,7 @@ describe("SqliteStorage.mutate", () => {
 	});
 
 	it("mutateMany applies all mutations atomically", () => {
-		const mutations: Mutation2<UserTable>[] = [
+		const mutations: Mutation2<typeof schema.User>[] = [
 			{ type: "insert", row: { id: 1, name: "Alice" } },
 			{ type: "insert", row: { id: 2, name: "Bob" } },
 			{ type: "update", key: { id: 1 }, partialRow: { name: "Carol" } },

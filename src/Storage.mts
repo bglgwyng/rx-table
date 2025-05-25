@@ -43,7 +43,7 @@ export type Storage<Schema extends Record<string, TableSchemaBase>> = {
 	prepareFindMany<Context, Table extends TableSchemaBase>(
 		query: Select<Table>,
 	): PreparedQueryAll<Context, Row<Table>>;
-	prepareMutation<Context, Table extends Schema[string]>(
+	prepareMutation<Context, Table extends TableSchemaBase>(
 		mutation: Mutation<Table>,
 	): PreparedMutation<Context>;
 };

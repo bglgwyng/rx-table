@@ -77,7 +77,7 @@ describe("SqliteStorage.findMany", () => {
 		db.exec(
 			"CREATE TABLE User (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)",
 		);
-		const storage = createTableStorage(
+		const storage = createTableStorage<typeof schema, "User">(
 			new BetterSqlite3Storage(schema, db),
 			"User",
 		);
@@ -105,7 +105,10 @@ describe("SqliteStorage.findMany", () => {
 		db.exec(
 			"CREATE TABLE User (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)",
 		);
-		storage = createTableStorage(new BetterSqlite3Storage(schema, db), "User");
+		storage = createTableStorage<typeof schema, "User">(
+			new BetterSqlite3Storage(schema, db),
+			"User",
+		);
 		// Insert sample data
 		for (let i = 1; i <= 10; ++i) {
 			storage.insert({ id: i, name: `User${i}`, age: 20 + i });
@@ -289,7 +292,7 @@ describe("SqliteStorage.findMany with composite key", () => {
 		db.exec(
 			"CREATE TABLE Composite (id INTEGER, sub_id INTEGER, name TEXT, PRIMARY KEY (id, sub_id))",
 		);
-		storage = createTableStorage(
+		storage = createTableStorage<typeof compositeTableSchema, "Composite">(
 			new BetterSqlite3Storage(compositeTableSchema, db),
 			"Composite",
 		);
