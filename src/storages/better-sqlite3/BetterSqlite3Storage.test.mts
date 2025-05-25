@@ -1,11 +1,11 @@
 import Database from "better-sqlite3";
 import {
+	schema,
 	testStorageImplementation,
-	userTableSchema,
 } from "../testStorageImplementation.mjs";
 import { BetterSqlite3Storage } from "./BetterSqlite3Storage.mjs";
 
-type UserTable = typeof userTableSchema;
+type UserTable = typeof schema.User;
 
 testStorageImplementation("SqliteStorage", () => {
 	const db = new Database(":memory:");
@@ -13,5 +13,5 @@ testStorageImplementation("SqliteStorage", () => {
     id INTEGER PRIMARY KEY,
     name TEXT
   )`);
-	return new BetterSqlite3Storage<UserTable>(userTableSchema, db);
+	return new BetterSqlite3Storage(schema, db);
 });

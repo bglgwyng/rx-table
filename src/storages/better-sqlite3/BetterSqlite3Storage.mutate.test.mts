@@ -1,59 +1,69 @@
 import Database from "better-sqlite3";
 import { beforeEach, describe, expect, it } from "vitest";
-import type { Mutation } from "../../Storage.mjs";
 import type { TableSchemaBase } from "../../types/TableSchema.mjs";
 import { BetterSqlite3Storage } from "./BetterSqlite3Storage.mjs";
+import { schema } from "../testStorageImplementation.mjs";
+import {
+	createTableStorage,
+	type Mutation2,
+	type TableStorage,
+} from "../../Storage.mjs";
 
-const userSchema: TableSchemaBase = {
-	name: "users",
-	columns: {
-		id: { kind: "number" },
-		name: { kind: "string" },
-	},
-	primaryKey: ["id"] as const,
-};
-
-type UserTable = typeof userSchema;
-
+// TODO: remove
 describe("SqliteStorage.mutate", () => {
-	let storage: BetterSqlite3Storage<UserTable>;
+	let userTableStorage: TableStorage<(typeof schema)["User"]>;
 
 	beforeEach(() => {
 		const db = new Database(":memory:");
-		db.exec(`CREATE TABLE users (
+		db.exec(`CREATE TABLE User (
       id INTEGER PRIMARY KEY,
       name TEXT
     )`);
-		storage = new BetterSqlite3Storage<UserTable>(userSchema, db); // already fixed
+		userTableStorage = createTableStorage<typeof schema, "User">(
+			new BetterSqlite3Storage<typeof schema>(schema, db),
+			"User",
+		);
 	});
 
 	it("mutate: insert/update/delete/upsert", () => {
-		storage.mutate({ type: "insert", row: { id: 1, name: "Alice" } });
-		expect(storage.findUnique({ id: 1 })).toEqual({ id: 1, name: "Alice" });
+		userTableStorage.mutate({ type: "insert", row: { id: 1, name: "Alice" } });
+		expect(userTableStorage.findUnique({ id: 1 })).toEqual({
+			id: 1,
+			name: "Alice",
+		});
 
-		storage.mutate({
+		userTableStorage.mutate({
 			type: "update",
 			key: { id: 1 },
 			partialRow: { name: "Bob" },
 		});
-		expect(storage.findUnique({ id: 1 })).toEqual({ id: 1, name: "Bob" });
+		expect(userTableStorage.findUnique({ id: 1 })).toEqual({
+			id: 1,
+			name: "Bob",
+		});
 
-		storage.mutate({ type: "upsert", row: { id: 1, name: "Carol" } });
-		expect(storage.findUnique({ id: 1 })).toEqual({ id: 1, name: "Carol" });
+		userTableStorage.mutate({ type: "upsert", row: { id: 1, name: "Carol" } });
+		expect(userTableStorage.findUnique({ id: 1 })).toEqual({
+			id: 1,
+			name: "Carol",
+		});
 
-		storage.mutate({ type: "delete", key: { id: 1 } });
-		expect(storage.findUnique({ id: 1 })).toBeNull();
+		userTableStorage.mutate({ type: "delete", key: { id: 1 } });
+		expect(userTableStorage.findUnique({ id: 1 })).toBeNull();
 	});
 
 	it("mutateMany applies all mutations atomically", () => {
-		const mutations: Mutation<UserTable>[] = [
+		const mutations: Mutation2<UserTable>[] = [
 			{ type: "insert", row: { id: 1, name: "Alice" } },
 			{ type: "insert", row: { id: 2, name: "Bob" } },
 			{ type: "update", key: { id: 1 }, partialRow: { name: "Carol" } },
 			{ type: "delete", key: { id: 2 } },
 		];
-		storage.mutateMany(mutations);
-		expect(storage.findUnique({ id: 1 })).toEqual({ id: 1, name: "Carol" });
-		expect(storage.findUnique({ id: 2 })).toBeNull();
+		userTableStorage.mutateMany(mutations);
+		expect(userTableStorage.findUnique({ id: 1 })).toEqual({
+			id: 1,
+			name: "Carol",
+		});
+		expect(userTableStorage.findUnique({ id: 2 })).toBeNull();
 	});
 });

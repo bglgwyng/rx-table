@@ -24,7 +24,7 @@ import {
 	mkPkRecords,
 	mkUpdate,
 } from "./RSql/mks.mjs";
-import type { Storage } from "./Storage.mjs";
+import type { Storage, TableStorage } from "./Storage.mjs";
 import { type Dynamic, createDynamic } from "./core/Dynamic.mjs";
 import type { PreparedMutation } from "./types/PreparedStatement.mjs";
 import type {
@@ -47,37 +47,13 @@ export class Table<T extends TableSchemaBase> {
 	// implements ReadableTable<T>, WritableTable<T>
 	constructor(
 		private tableRef: TableRef<T>,
-		storage: Storage<T>,
+		storage: TableStorage<T>,
 	) {
 		this.storage = storage;
-
-		this.preparedInsertRow = this.storage.prepareMutation<Row<T>>(
-			mkInsert(
-				this.tableRef,
-				Object.fromEntries(
-					Object.entries(this.tableRef.schema.columns).map(
-						([col]) =>
-							[
-								col,
-								mkParameter((row: Row<T>) => row[col as keyof Row<T>]),
-							] as const,
-					),
-				) as Record<keyof Row<T>, Parameter>,
-			),
-		);
-		this.preparedDeleteRow = this.storage.prepareMutation<PrimaryKeyRecord<T>>(
-			mkDelete(
-				this.tableRef,
-				mkPkRecords(this.tableRef.schema, (key: PrimaryKeyRecord<T>) => key),
-			),
-		);
 	}
 
-	private preparedInsertRow: PreparedMutation<Row<T>>;
-	private preparedDeleteRow: PreparedMutation<PrimaryKeyRecord<T>>;
-
 	insert(row: Row<T>): void {
-		this.preparedInsertRow(row);
+		this.storage.insert(row);
 		this.events.next([{ kind: "insert", row }]);
 	}
 	upsert(row: Row<T>): void {
@@ -91,7 +67,7 @@ export class Table<T extends TableSchemaBase> {
 			key: PrimaryKeyRecord<T>;
 			changes: Partial<Omit<Row<T>, PrimaryKey<T>[number]>>;
 		};
-		const preparedUpdateRow = this.storage.prepareMutation<Context>(
+		const preparedUpdateRow = this.storage.storage.prepareMutation<Context, T>(
 			mkUpdate(
 				this.tableRef,
 				Object.fromEntries(
@@ -115,7 +91,7 @@ export class Table<T extends TableSchemaBase> {
 		this.events.next([{ kind: "update", key, row: changes }]);
 	}
 	delete(key: PrimaryKeyRecord<T>): void {
-		this.preparedDeleteRow(key);
+		this.storage.delete(key);
 		this.events.next([{ kind: "delete", key }]);
 	}
 
@@ -246,7 +222,7 @@ export class Table<T extends TableSchemaBase> {
 		);
 	}
 
-	private storage: Storage<T>;
+	private storage: TableStorage<T>;
 	private events: Subject<TableEvent<T>[]> = new Subject();
 	private partition = partitionByKey(this.events.pipe(concatAll()), (e) =>
 		this.getKeyTuple(e),

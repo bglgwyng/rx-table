@@ -10,8 +10,15 @@ import {
 	mkSelect,
 	mkTuple,
 } from "./RSql/mks.mjs";
-import type { PrimaryKeyRecord, Row, TableRef } from "./types/TableSchema.mjs";
+import type {
+	PrimaryKey,
+	PrimaryKeyRecord,
+	Row,
+	TableRef,
+} from "./types/TableSchema.mjs";
 import type { TableSchemaBase } from "./types/TableSchema.mjs";
+import type { PreparedQueryOne } from "./types/PreparedStatement.mjs";
+import type { Storage } from "./Storage.mjs";
 
 export type PageDelta<T extends TableSchemaBase> = (
 	| {
@@ -245,5 +252,143 @@ export function compileFindMany<
 		countTotal: totalCountAst,
 		countAfter: countAfterAst,
 		countBefore: countBeforeAst,
+	};
+}
+
+export function findUnique<Table extends TableSchemaBase>(
+	table: TableRef<Table>,
+	preparedFindUnique: PreparedQueryOne<PrimaryKeyRecord<Table>, Row<Table>>,
+	key: PrimaryKeyRecord<Table>,
+): Row<Table> | null {
+	const row = preparedFindUnique(key);
+
+	return row === undefined ? null : (row as Row<Table>);
+}
+
+export function findMany<
+	Schema extends Record<string, TableSchemaBase>,
+	Table extends Schema[string],
+	Cursor extends PrimaryKeyRecord<Table>,
+>(
+	storage: Storage<Schema>,
+	table: TableRef<Table>,
+	pageInput: PageInit<Table, Cursor>,
+): Page<Table, Cursor> {
+	const { loadForward, loadBackward, countAfter, countBefore, countTotal } =
+		prepareFindMany<Schema, Table, Cursor>(storage, table, {
+			filter: pageInput.filter,
+			orderBy: pageInput.orderBy.map(({ column, direction }) => ({
+				column: column as PrimaryKey<Table>[number],
+				direction,
+			})),
+		});
+
+	let rows: Cursor[] = [];
+
+	if (pageInput.kind === "forward") {
+		const forwardInput: ForwardPageInit<Table, Cursor> = {
+			kind: "forward",
+			first: pageInput.first,
+			after: pageInput.after,
+		};
+		rows = loadForward(forwardInput) as Cursor[];
+	} else {
+		const backwardInput: BackwardPageInit<Table, Cursor> = {
+			kind: "backward",
+			last: pageInput.last,
+			before: pageInput.before,
+		};
+		rows = loadBackward(backwardInput) as Cursor[];
+		rows = rows.reverse();
+	}
+
+	const startCursor = rows[0];
+	const endCursor = rows.at(-1);
+
+	const rowCount = countTotal();
+
+	const itemBeforeCount =
+		pageInput.kind === "forward"
+			? pageInput.after === undefined
+				? 0
+				: rows.length > 0
+					? countBefore(rows[0]!)
+					: rowCount
+			: rows.length > 0
+				? countBefore(rows[0]!)
+				: 0;
+
+	const itemAfterCount =
+		pageInput.kind === "backward"
+			? pageInput.before === undefined
+				? 0
+				: rows.length > 0
+					? countAfter(rows.at(-1)!)
+					: rowCount
+			: rows.length > 0
+				? countAfter(rows.at(-1)!)
+				: 0;
+
+	// Get total count
+
+	return {
+		rows,
+		rowCount,
+		startCursor,
+		endCursor,
+		itemBeforeCount,
+		itemAfterCount,
+	};
+}
+
+function prepareFindMany<
+	Schema extends Record<string, TableSchemaBase>,
+	Table extends Schema[string],
+	Cursor extends PrimaryKeyRecord<Table>,
+>(
+	storage: Storage<Schema>,
+	table: TableRef<Table>,
+	options: {
+		filter?: Expression<Table>;
+		orderBy: readonly {
+			column: PrimaryKey<Table>[number];
+			direction: "asc" | "desc";
+		}[];
+	},
+) {
+	const { filter, orderBy } = options;
+	const {
+		loadFirst,
+		loadLast,
+		loadNext,
+		loadPrev,
+		countTotal,
+		countAfter,
+		countBefore,
+	} = compileFindMany(table, {
+		filter,
+		orderBy,
+	});
+
+	return {
+		loadForward: (pageInput: ForwardPageInit<Table, Cursor>) =>
+			pageInput.after === undefined
+				? storage.prepareFindMany(loadFirst)({ limit: pageInput.first })
+				: storage.prepareFindMany(loadNext)({
+						cursor: pageInput.after,
+						limit: pageInput.first,
+					}),
+		loadBackward: (pageInput: BackwardPageInit<Table, Cursor>) =>
+			pageInput.before === undefined
+				? storage.prepareFindMany(loadLast)({ limit: pageInput.last })
+				: storage.prepareFindMany(loadPrev)({
+						cursor: pageInput.before,
+						limit: pageInput.last,
+					}),
+		countAfter: (cursor: Cursor) =>
+			storage.prepareCount(countAfter)({ after: cursor }),
+		countBefore: (cursor: Cursor) =>
+			storage.prepareCount(countBefore)({ before: cursor }),
+		countTotal: storage.prepareCount(countTotal),
 	};
 }

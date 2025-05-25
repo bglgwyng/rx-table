@@ -3,16 +3,19 @@ import { describe, expect, it } from "vitest";
 import { Table } from "./Table.mjs";
 import { BetterSqlite3Storage } from "./storages/better-sqlite3/BetterSqlite3Storage.mjs";
 import type { TableSchemaBase } from "./types/TableSchema.mjs";
+import { createTableStorage } from "./Storage.mjs";
 
-const userTableSchema = {
-	name: "User",
-	columns: {
-		id: { kind: "number" },
-		name: { kind: "string" },
-	},
-	primaryKey: ["id"] as const,
-} satisfies TableSchemaBase;
-type UserTable = typeof userTableSchema;
+const schema = {
+	User: {
+		name: "User",
+		columns: {
+			id: { kind: "number" },
+			name: { kind: "string" },
+		},
+		primaryKey: ["id"],
+	} satisfies TableSchemaBase,
+};
+type UserTable = (typeof schema)["User"];
 
 function createSqliteStorage() {
 	const db = new Database(":memory:");
@@ -20,17 +23,20 @@ function createSqliteStorage() {
     id INTEGER PRIMARY KEY,
     name TEXT
   )`);
-	return new BetterSqlite3Storage<UserTable>(userTableSchema, db);
+	return new BetterSqlite3Storage(schema, db);
 }
 
 describe("Table", () => {
 	function setup() {
-		const storage = createSqliteStorage();
-		const table = new Table<UserTable>(
+		const storage = createTableStorage<typeof schema, "User">(
+			createSqliteStorage(),
+			"User",
+		);
+		const table = new Table(
 			{
 				kind: "base",
 				name: "User",
-				schema: userTableSchema,
+				schema: schema.User,
 			},
 			storage,
 		);

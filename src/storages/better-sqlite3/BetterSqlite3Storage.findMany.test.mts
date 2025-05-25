@@ -11,31 +11,37 @@ import type { Row, TableRef } from "../../types/TableSchema.mjs";
 import type { TableSchemaBase } from "../../types/TableSchema.mjs";
 import { rsqlExpressionToFilterFn } from "../../util/rsqlExpressionToFilterFn.mjs";
 import { BetterSqlite3Storage } from "./BetterSqlite3Storage.mjs";
+import { createTableStorage, type TableStorage } from "../../Storage.mjs";
 
-const userSchema = {
-	name: "users",
-	columns: {
-		id: { kind: "number" },
-		name: { kind: "string" },
-		age: { kind: "number" },
+const schema = {
+	User: {
+		name: "User",
+		columns: {
+			id: { kind: "number" },
+			name: { kind: "string" },
+			age: { kind: "number" },
+		},
+		primaryKey: ["id"] as const,
 	},
-	primaryKey: ["id"] as const,
-} satisfies TableSchemaBase;
+} satisfies Record<string, TableSchemaBase>;
 
-type UserTable = typeof userSchema;
+type UserTable = (typeof schema)["User"];
 
 describe("SqliteStorage.findMany", () => {
 	const table: TableRef<UserTable> = {
 		kind: "base",
-		name: "users",
-		schema: userSchema,
+		name: "User",
+		schema: schema.User,
 	};
 	it("returns results in orderBy direction for before+last (backward) pagination (Relay spec)", () => {
 		const db = new Database(":memory:");
 		db.exec(
-			"CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)",
+			"CREATE TABLE User (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)",
 		);
-		const storage = new BetterSqlite3Storage<UserTable>(userSchema, db);
+		const storage = createTableStorage<typeof schema, "User">(
+			new BetterSqlite3Storage<typeof schema>(schema, db) as any,
+			"User",
+		);
 		for (let i = 1; i <= 10; ++i) {
 			storage.insert({ id: i, name: `User${i}`, age: 20 + i });
 		}
@@ -69,9 +75,12 @@ describe("SqliteStorage.findMany", () => {
 	it("throws if orderBy directions are mixed (asc/desc)", () => {
 		const db = new Database(":memory:");
 		db.exec(
-			"CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)",
+			"CREATE TABLE User (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)",
 		);
-		const storage = new BetterSqlite3Storage<UserTable>(userSchema, db);
+		const storage = createTableStorage(
+			new BetterSqlite3Storage(schema, db),
+			"User",
+		);
 		for (let i = 1; i <= 3; ++i) {
 			storage.insert({ id: i, name: `User${i}`, age: 20 + i });
 		}
@@ -89,14 +98,14 @@ describe("SqliteStorage.findMany", () => {
 	});
 
 	let db: Database.Database;
-	let storage: BetterSqlite3Storage<UserTable>;
+	let storage: TableStorage<UserTable>;
 
 	beforeEach(() => {
 		db = new Database(":memory:");
 		db.exec(
-			"CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)",
+			"CREATE TABLE User (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)",
 		);
-		storage = new BetterSqlite3Storage<UserTable>(userSchema, db);
+		storage = createTableStorage(new BetterSqlite3Storage(schema, db), "User");
 		// Insert sample data
 		for (let i = 1; i <= 10; ++i) {
 			storage.insert({ id: i, name: `User${i}`, age: 20 + i });
@@ -191,7 +200,7 @@ describe("SqliteStorage.findMany", () => {
 		};
 		const [sql, getParams] = compileQueryToSql(expr);
 		const params = getParams({ name: "hello" });
-		expect(sql).toBe("SELECT * FROM (users) WHERE (?, ?, ?)");
+		expect(sql).toBe("SELECT * FROM (User) WHERE (?, ?, ?)");
 		expect(params.length).toBe(3);
 		expect(params[0]).toBe(1);
 		expect(params[1]).toBe("hello");
@@ -228,9 +237,12 @@ describe("SqliteStorage.findMany", () => {
 	it("returns correct counts for backward pagination with no results", () => {
 		const db = new Database(":memory:");
 		db.exec(
-			"CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)",
+			"CREATE TABLE User (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)",
 		);
-		const storage = new BetterSqlite3Storage<UserTable>(userSchema, db);
+		const storage = createTableStorage<typeof schema, "User">(
+			new BetterSqlite3Storage<typeof schema>(schema, db),
+			"User",
+		);
 
 		// Insert some test data
 		for (let i = 1; i <= 3; ++i) {
@@ -256,28 +268,30 @@ describe("SqliteStorage.findMany", () => {
 });
 
 const compositeTableSchema = {
-	name: "composite",
-	columns: {
-		id: { kind: "number" },
-		sub_id: { kind: "number" },
-		name: { kind: "string" },
-	},
-	primaryKey: ["id", "sub_id"] as const,
-} satisfies TableSchemaBase;
-type CompositeTable = typeof compositeTableSchema;
+	Composite: {
+		name: "Composite",
+		columns: {
+			id: { kind: "number" },
+			sub_id: { kind: "number" },
+			name: { kind: "string" },
+		},
+		primaryKey: ["id", "sub_id"],
+	} satisfies TableSchemaBase,
+};
+type CompositeTable = typeof compositeTableSchema.Composite;
 
 describe("SqliteStorage.findMany with composite key", () => {
 	let db: Database.Database;
-	let storage: BetterSqlite3Storage<CompositeTable>;
+	let storage: TableStorage<CompositeTable>;
 
 	beforeEach(() => {
 		db = new Database(":memory:");
 		db.exec(
-			"CREATE TABLE composite (id INTEGER, sub_id INTEGER, name TEXT, PRIMARY KEY (id, sub_id))",
+			"CREATE TABLE Composite (id INTEGER, sub_id INTEGER, name TEXT, PRIMARY KEY (id, sub_id))",
 		);
-		storage = new BetterSqlite3Storage<CompositeTable>(
-			compositeTableSchema,
-			db,
+		storage = createTableStorage(
+			new BetterSqlite3Storage(compositeTableSchema, db),
+			"Composite",
 		);
 		// Insert sample data: id 1~3, sub_id 1~2
 		for (let id = 1; id <= 3; ++id) {
